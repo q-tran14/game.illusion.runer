@@ -1,0 +1,61 @@
+using UnityEngine;
+
+public class PathSegment : MonoBehaviour
+{
+    public enum FaceType { Top, Left, Right }       // Left Rot: -90 0 0 | Right Rot: -90 -90 0
+    public enum TurnDir { Straight, Left, Right, UpLeft, DownLeft, UpRight, DownRight }
+
+    public Vector3 gridPos;                         // Tọa độ lưới logic (x, y, z)
+    public TurnDir direction;                       // Hướng player đang đi
+    public FaceType faceType = FaceType.Top;        // Hướng bề mặt: Mặt phẳng hướng lên trên
+    public PathSegment next;                        // Plane tiếp theo
+    public PathSegment endPathCorner;               // Plane rẽ sang hướng mới
+    public void Init(Vector3 grid, TurnDir dir, FaceType face)
+    {
+        gridPos = grid;
+        direction = dir;
+        faceType = face;
+        ChangeFace(face);
+    }
+    
+    public void ChangeFace(FaceType face)
+    {
+        switch (face)
+        {
+            case FaceType.Left:
+                transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
+                break;
+            case FaceType.Right:
+                transform.rotation = Quaternion.Euler(-90f, -90f, 0f);
+                break;
+            default:
+                transform.rotation = Quaternion.Euler(0f, 0f, 0f);
+                break;
+        }
+    }
+
+    public Vector3 GetNextGridPos()
+    {
+        switch (direction)
+        {
+            case TurnDir.Left:      return gridPos + new Vector3(-1, 0, 0);
+            case TurnDir.Right:     return gridPos + new Vector3(1, 0, 0);
+            case TurnDir.UpLeft:    return gridPos + new Vector3(-1, 0, 1);
+            case TurnDir.DownLeft:  return gridPos + new Vector3(-1, 0, -1);
+            case TurnDir.UpRight:   return gridPos + new Vector3(1, 0, 1);
+            case TurnDir.DownRight: return gridPos + new Vector3(1, 0, -1);
+            default:                return gridPos + new Vector3(0, 0, 1);
+        }
+    }
+
+    public Vector3 GetWorldPos(float unit)
+    {
+        float width = unit * 0.5f;
+        float height = unit * 0.25f;
+        return new Vector3(
+            gridPos.x * width - gridPos.y * width,
+            gridPos.x * height + gridPos.y * height - gridPos.z * unit,
+            0
+        );
+    }
+}
