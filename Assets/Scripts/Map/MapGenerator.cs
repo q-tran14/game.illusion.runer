@@ -1,5 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
+using UnityEditor;
+using System.Linq;
 
 public class MapGenerator : Singleton<MapGenerator>
 {
@@ -8,21 +10,18 @@ public class MapGenerator : Singleton<MapGenerator>
     [SerializeField] private float unitSize = 2f;
     [SerializeField] private int initialCubes = 15;
     [SerializeField] private int maxCubes = 20;
-
+    private int dirCounter = 0;
     private readonly Dictionary<Vector3, PathSegment> cubeMap = new();
     private readonly List<PathSegment> activeCubes = new();
 
     private Vector3 currentGrid = Vector3.zero;
     private PathSegment.TurnDir currentDir = PathSegment.TurnDir.Straight;
 
-    void Start()
-    {
-        // Spawn chuỗi cube ban đầu
-        SpawnMap();
-    }
+    private void Start() => SpawnMap();
 
     public void SpawnMap()
     {
+        dirCounter = 0;
         for (int i = 0; i < initialCubes; i++) SpawnNextCube();
     }
 
@@ -33,7 +32,7 @@ public class MapGenerator : Singleton<MapGenerator>
         currentGrid = Vector3.zero;
     }
 
-    void Update()
+    private void Update()
     {
         // Spawn thêm khi player gần cuối đường
         float dist = Vector3.Distance(player.position, activeCubes[^1].transform.position);
@@ -49,7 +48,7 @@ public class MapGenerator : Singleton<MapGenerator>
         }
     }
 
-    void SpawnNextCube()
+    private void SpawnNextCube()
     {
         var prefabObj = ObjectPool.Instance.Get();
 
@@ -82,29 +81,56 @@ public class MapGenerator : Singleton<MapGenerator>
         prefabObj.SetActive(true);
     }
 
-    PathSegment.TurnDir GetNextValidDirection()
+    private PathSegment.TurnDir GetNextValidDirection()
     {
-        var all = new List<PathSegment.TurnDir>()
+        var all = new Dictionary<PathSegment.TurnDir, float>()
         {
-            PathSegment.TurnDir.Left,
-            PathSegment.TurnDir.Right,
-            PathSegment.TurnDir.UpLeft,
-            PathSegment.TurnDir.DownLeft,
-            PathSegment.TurnDir.UpRight,
-            PathSegment.TurnDir.DownRight,
-            PathSegment.TurnDir.Straight
+            {PathSegment.TurnDir.Left, 20f},
+            {PathSegment.TurnDir.Right, 20f},
+            {PathSegment.TurnDir.UpLeft, 5f},
+            {PathSegment.TurnDir.DownLeft, 5f},
+            {PathSegment.TurnDir.UpRight, 5f},
+            {PathSegment.TurnDir.DownRight, 5f},
+            {PathSegment.TurnDir.Straight, 40f}
         };
 
         // Bỏ hướng ngược lại để tránh đảo chiều
-        PathSegment.TurnDir opposite = GetOpposite(currentDir);
-        all.Remove(opposite);
+        if (currentDir != PathSegment.TurnDir.Straight)
+        {
+            PathSegment.TurnDir opposite = GetOpposite(currentDir);
+            all.Remove(opposite);
+        }
 
         // Chọn random trong danh sách hợp lệ
-        int r = Random.Range(0, all.Count);
-        return all[r];
+        PathSegment.TurnDir dir = ChooseDir(all);
+
+        return dir;
     }
 
-    PathSegment.TurnDir GetOpposite(PathSegment.TurnDir dir)
+    private PathSegment.TurnDir ChooseDir(Dictionary<PathSegment.TurnDir, float> validDirs)
+    {
+        // 7 trường hợp: Straight tỉ lệ cao nhất ~ giữ hướng di chuyển không đổi
+        // 6 trường hợp còn lại tỉ lệ bằng nhau
+        float totalWeight = 0f;
+        foreach (var kv in validDirs)
+            totalWeight += kv.Value;
+
+        // Thay vì random, dùng chia lấy dư
+        float value = dirCounter % totalWeight;
+        dirCounter++;
+
+        float cumulative = 0f;
+        foreach (var kv in validDirs)
+        {
+            cumulative += kv.Value;
+            if (value < cumulative)
+                return kv.Key;
+        }
+
+        return validDirs.Keys.First();
+    }
+
+    private PathSegment.TurnDir GetOpposite(PathSegment.TurnDir dir)
     {
         switch (dir)
         {
@@ -118,7 +144,7 @@ public class MapGenerator : Singleton<MapGenerator>
         }
     }
 
-    Vector3 GetNextGrid(Vector3 pos, PathSegment.TurnDir dir)
+    private Vector3 GetNextGrid(Vector3 pos, PathSegment.TurnDir dir)
     {
         switch (dir)
         {
