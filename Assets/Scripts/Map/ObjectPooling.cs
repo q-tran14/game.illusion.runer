@@ -80,6 +80,7 @@ public class ObjectPool : Singleton<ObjectPool>
     private GameObject CreateNewInstance()
     {
         var newObj = Instantiate(prefab, transform);
+        newObj.transform.localScale = newObj.transform.localScale * 4.5f;
         newObj.name = prefab.name + "_Pooled";
         totalCreated++;
         return newObj;

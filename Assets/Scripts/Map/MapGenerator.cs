@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using UnityEditor;
 using System.Linq;
+using SampleCosmoRun;
 
 public class MapGenerator : Singleton<MapGenerator>
 {
@@ -10,17 +11,39 @@ public class MapGenerator : Singleton<MapGenerator>
     [SerializeField] private float unitSize = 2f;
     [SerializeField] private int initialCubes = 15;
     [SerializeField] private int maxCubes = 20;
+
+    [Header("Cube Prefab Settings")]
+    [Tooltip("Prefab bounds center from mesh, typically (0,1,0) for bottom-pivot cube")]
+    [SerializeField] private Vector3 prefabBoundsCenter = new(0f, 1f, 0f);
+    [Tooltip("Prefab bounds size from mesh, typically (2,2,2) for a 2x2x2 cube")]
+    [SerializeField] private Vector3 prefabBoundsSize = new(2f, 2f, 2f);
+    [Tooltip("Gap (world units) between adjacent cubes")]
+    [SerializeField] private float cubeGap = 0.2f;
+
     private int dirCounter = 0;
     private readonly Dictionary<Vector3, PathSegment> cubeMap = new();
     private readonly List<PathSegment> activeCubes = new();
+    
+    // Track cube positions using SampleCubeGroup
+    [SerializeField] private SampleCosmoRun.SampleCubeGroup cubeGroup;
 
     private Vector3 currentGrid = Vector3.zero;
     private PathSegment.TurnDir currentDir = PathSegment.TurnDir.Straight;
 
-    private void Start() => SpawnMap();
+    private void Start()
+    {
+        if (cubeGroup == null)
+            cubeGroup = gameObject.AddComponent<SampleCosmoRun.SampleCubeGroup>();
+
+        cubeGroup.PrefabBoundsCenter = prefabBoundsCenter;
+        cubeGroup.PrefabBoundsSize = prefabBoundsSize;
+
+        SpawnMap();
+    }
 
     public void SpawnMap()
     {
+        ClearMap();
         dirCounter = 0;
         for (int i = 0; i < initialCubes; i++) SpawnNextCube();
     }
@@ -30,55 +53,62 @@ public class MapGenerator : Singleton<MapGenerator>
         ObjectPool.Instance.RemovePool();
         cubeMap.Clear();
         currentGrid = Vector3.zero;
+        if (cubeGroup != null)
+        {
+            cubeGroup.Clear();
+        }
     }
 
     private void Update()
     {
-        // Spawn thêm khi player gần cuối đường
-        float dist = Vector3.Distance(player.position, activeCubes[^1].transform.position);
-        if (dist < 10f) SpawnNextCube();
+        if (activeCubes.Count == 0) return;
 
-        // Giới hạn số lượng cube trong scene
+        // Spawn more when player is near the end
+        float dist = Vector3.Distance(player.position, activeCubes[^1].transform.position);
+        if (dist < 10f)
+        {
+            SpawnNextCube();
+        }
+
+        // Limit cube count in scene
         if (activeCubes.Count > maxCubes)
         {
             var old = activeCubes[0];
             activeCubes.RemoveAt(0);
             cubeMap.Remove(old.gridPos);
             ObjectPool.Instance.Return(old.gameObject);
+            // Remove from cube group too
+            if (cubeGroup != null) cubeGroup.RemoveTailFace();
         }
     }
 
-    private void SpawnNextCube()
+    private bool SpawnNextCube()
     {
-        var prefabObj = ObjectPool.Instance.Get();
+        // Create a new cube at next grid position
+        Vector3 nextGrid = (activeCubes.Count == 0) ? Vector3.zero : GetNextGrid(currentGrid, GetNextValidDirection());
 
+        // Skip if position already occupied
+        if (cubeMap.ContainsKey(nextGrid)) return false;
+
+        var prefabObj = ObjectPool.Instance.Get();
         var seg = prefabObj.GetComponent<PathSegment>();
         if (seg == null) seg = prefabObj.AddComponent<PathSegment>();
 
-        // ✅ Với cube đầu tiên, luôn đặt tại (0,0,0)
-        PathSegment.TurnDir nextDir = currentDir == PathSegment.TurnDir.Straight ? PathSegment.TurnDir.Straight : GetNextValidDirection();
 
-        Vector3 nextGrid = (activeCubes.Count == 0) ? Vector3.zero : GetNextGrid(currentGrid, nextDir);
+        // Initialize segment (using straight path for now, can be enhanced with SampleCubeFace.Direction)
+        seg.Init(nextGrid, PathSegment.TurnDir.Straight, PathSegment.FaceType.Top);
 
-        // Nếu trùng cube → bỏ qua
-        if (cubeMap.ContainsKey(nextGrid))
-        {
-            ObjectPool.Instance.Return(prefabObj);
-            return;
-        }
-
-        seg.Init(nextGrid, nextDir, PathSegment.FaceType.Top);
-
-        prefabObj.transform.position = seg.GetWorldPos(unitSize);
+        // Position using grid-based world position, add small gap between cubes but do NOT change prefab scale
+        float spacing = prefabBoundsSize.y + cubeGap;
+        prefabObj.transform.position = new Vector3(nextGrid.x * spacing, nextGrid.y * spacing, nextGrid.z * spacing);
         prefabObj.transform.rotation = Quaternion.identity;
 
         cubeMap[nextGrid] = seg;
         activeCubes.Add(seg);
-
-        currentDir = nextDir;
         currentGrid = nextGrid;
 
         prefabObj.SetActive(true);
+        return true;
     }
 
     private PathSegment.TurnDir GetNextValidDirection()
