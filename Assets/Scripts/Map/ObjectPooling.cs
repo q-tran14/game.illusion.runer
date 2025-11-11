@@ -8,8 +8,20 @@ public class ObjectPool : Singleton<ObjectPool>
     [SerializeField] private int minPoolSize = 12;
     [SerializeField] private int maxPoolSize = 15;
 
+    [Header("Box Collider Setup (Optional)")]
+    [Tooltip("If enabled, applies custom BoxCollider settings to pooled cubes.")]
+    [SerializeField] private bool configureCollider = false;
+    [Tooltip("Override collider.center when configureCollider is enabled.")]
+    [SerializeField] private bool overrideColliderCenter = true;
+    [SerializeField] private Vector3 colliderCenter = new Vector3(0f, 1f, 0f);
+    [Tooltip("Override collider.size when configureCollider is enabled.")]
+    [SerializeField] private bool overrideColliderSize = true;
+    [SerializeField] private Vector3 colliderSize = new Vector3(2.2f, 2f, 2.2f);
+
     private readonly Queue<GameObject> pool = new Queue<GameObject>();
     private int totalCreated = 0;
+    public int TotalCreated => totalCreated;
+    public int AvailableCount => pool.Count;
 
     protected override void OnSingletonInit()
     {
@@ -46,17 +58,9 @@ public class ObjectPool : Singleton<ObjectPool>
             return newObj;
         }
 
-        // Nếu đã tới giới hạn → cảnh báo và lấy tạm 1 object đang dùng
-        Debug.Log($"[ObjectPool] Max pool size ({maxPoolSize}) reached. Reusing an object.");
-        var fallbackObj = pool.Count > 0 ? pool.Dequeue() : null;
-        if (fallbackObj == null)
-        {
-            // Nếu chẳng còn object nào trong pool (cực hiếm)
-            fallbackObj = CreateNewInstance();
-        }
-
-        fallbackObj.SetActive(true);
-        return fallbackObj;
+        // Đạt giới hạn → không tạo mới, trả null cho caller tự xử lý (có thể tăng maxPoolSize)
+        Debug.LogWarning($"[ObjectPool] Max pool size ({maxPoolSize}) reached. Consider increasing maxPoolSize.");
+        return null;
     }
 
     public void Return(GameObject obj)
@@ -67,6 +71,8 @@ public class ObjectPool : Singleton<ObjectPool>
         if (pool.Count < maxPoolSize)
         {
             obj.SetActive(false);
+            // Đưa object về làm con của pool để gọn Hierarchy
+            obj.transform.SetParent(transform, false);
             pool.Enqueue(obj);
         }
         else
@@ -80,8 +86,30 @@ public class ObjectPool : Singleton<ObjectPool>
     private GameObject CreateNewInstance()
     {
         var newObj = Instantiate(prefab, transform);
-        newObj.transform.localScale = newObj.transform.localScale * 4.5f;
+        newObj.transform.localScale = new Vector3(4.5f, 4.5f, 4.5f);
         newObj.name = prefab.name + "_Pooled";
+        
+        // Thêm PathSegment nếu chưa có
+        if (newObj.GetComponent<PathSegment>() == null)
+        {
+            newObj.AddComponent<PathSegment>();
+        }
+        
+        // Thêm BoxCollider nếu chưa có (cho .obj file)
+        var boxCollider = newObj.GetComponent<BoxCollider>();
+        if (boxCollider == null) boxCollider = newObj.AddComponent<BoxCollider>();
+        boxCollider.isTrigger = true; // Dùng trigger để detect player
+
+        // Tùy chọn khôi phục cấu hình collider theo yêu cầu người dùng
+        if (configureCollider)
+        {
+            if (overrideColliderCenter) boxCollider.center = colliderCenter;
+            if (overrideColliderSize) boxCollider.size = colliderSize;
+        }
+        
+        // Tag để dễ identify
+        newObj.tag = "PathCube";
+        
         totalCreated++;
         return newObj;
     }
@@ -113,6 +141,7 @@ public class ObjectPool : Singleton<ObjectPool>
         }
 #endif
 
+        totalCreated = 0; // reset đếm sau khi hủy toàn bộ
         Debug.Log($"[ObjectPool] Cleared {count} pooled objects. Remaining: {pool.Count}");
     }
 

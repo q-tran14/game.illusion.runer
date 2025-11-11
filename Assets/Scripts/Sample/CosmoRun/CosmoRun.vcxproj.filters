@@ -1,0 +1,167 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="include">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="resource">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="resource\font">
+      <UniqueIdentifier>{1339fbb0-0b98-4645-af26-c52142bacbe5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="resource\lang">
+      <UniqueIdentifier>{0618a37b-ac6d-4f43-b83a-f5931847d102}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="resource\music">
+      <UniqueIdentifier>{44285077-ac3d-43cc-8527-6f50483be48f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="MainStage.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Background.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="CubeFace.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Cube.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Common.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Ball.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="CubeGroup.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Lang.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="CustomText.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Buttons.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="BrushCreator.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="ScoreBoard.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Music.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="SplashStage.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="BaseStage.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="MainStage.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Background.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="CubeFace.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Cube.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Ball.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="CubeGroup.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Lang.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="CustomText.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Buttons.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Common.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Interpolator.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="BrushAnimation.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="BrushCreator.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="ScoreBoard.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Music.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="SplashStage.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="BaseStage.h">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="CosmoRun.rc">
+      <Filter>resource</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="resource\fonts\Gill-Sans-MT-Condensed.TTF">
+      <Filter>resource\font</Filter>
+    </Font>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resource\lang\en.ini">
+      <Filter>resource\lang</Filter>
+    </None>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="resource\favicon.ico">
+      <Filter>resource</Filter>
+    </Image>
+    <Image Include="resource\logo.png">
+      <Filter>resource</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="resource\music\bg.mp3">
+      <Filter>resource\music</Filter>
+    </Media>
+    <Media Include="resource\music\die.mp3">
+      <Filter>resource\music</Filter>
+    </Media>
+    <Media Include="resource\music\click.mp3">
+      <Filter>resource\music</Filter>
+    </Media>
+  </ItemGroup>
+</Project>

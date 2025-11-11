@@ -36,26 +36,28 @@ public class PathSegment : MonoBehaviour
 
     public Vector3 GetNextGridPos()
     {
+        // ✅ Đồng bộ với MapGenerator - Z = forward
         switch (direction)
         {
-            case TurnDir.Left:      return gridPos + new Vector3(-1, 0, 0);
-            case TurnDir.Right:     return gridPos + new Vector3(1, 0, 0);
-            case TurnDir.UpLeft:    return gridPos + new Vector3(-1, 0, 1);
-            case TurnDir.DownLeft:  return gridPos + new Vector3(-1, 0, -1);
-            case TurnDir.UpRight:   return gridPos + new Vector3(1, 0, 1);
-            case TurnDir.DownRight: return gridPos + new Vector3(1, 0, -1);
-            default:                return gridPos + new Vector3(0, 0, 1);
+            case TurnDir.Straight:   return gridPos + new Vector3(0, 0, 1);   // Thẳng
+            case TurnDir.Left:       return gridPos + new Vector3(-1, 0, 0);  // Trái
+            case TurnDir.Right:      return gridPos + new Vector3(1, 0, 0);   // Phải
+            case TurnDir.UpLeft:     return gridPos + new Vector3(-1, 0, 1);  // Trái-Trên
+            case TurnDir.DownLeft:   return gridPos + new Vector3(-1, 0, -1); // Trái-Dưới
+            case TurnDir.UpRight:    return gridPos + new Vector3(1, 0, 1);   // Phải-Trên
+            case TurnDir.DownRight:  return gridPos + new Vector3(1, 0, -1);  // Phải-Dưới
+            default:                 return gridPos + new Vector3(0, 0, 1);
         }
     }
 
     public Vector3 GetWorldPos(float unit)
     {
-        float width = unit * 0.5f;
-        float height = unit * 0.25f;
+        // ✅ Chuyển grid position thành world position
+        // gridPos.x = left/right, gridPos.z = forward/back, gridPos.y = up/down (không dùng)
         return new Vector3(
-            gridPos.x * width - gridPos.y * width,
-            gridPos.x * height + gridPos.y * height - gridPos.z * unit,
-            0
+            gridPos.x * unit,      // X world = X grid * khoảng cách
+            0,                      // Y world = 0 (tất cả cube ở cùng độ cao)
+            gridPos.z * unit        // Z world = Z grid * khoảng cách
         );
     }
 }

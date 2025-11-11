@@ -5,22 +5,44 @@ using UnityEngine;
 public class CameraFollow : MonoBehaviour
 {
     [SerializeField] private Transform player;
-
     [Header("Offset & Smoothness")]
-    [SerializeField] private Vector3 offset = new Vector3(75f, 85f, -75f);
+    [SerializeField] private Vector3 offset = new Vector3(40f, 65f, -40f);
     [SerializeField] private float smoothSpeed = 15f;
 
     [SerializeField] private Vector3 fixedRotation = new Vector3 (40f, -45f, 0f);
 
     void Start()
     {
+        // Tự động tìm player nếu chưa assign
+        if (player == null)
+        {
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
+            {
+                player = playerObj.transform;
+            }
+        }
+
         // Giữ nguyên góc nghiêng camera cố định
         transform.rotation = Quaternion.Euler(fixedRotation);
     }
 
     void LateUpdate()
     {
-        if (player == null) return;
+        // Tự động tìm player nếu bị mất (vd: sau khi restart)
+        if (player == null)
+        {
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
+            {
+                player = playerObj.transform;
+            }
+            else
+            {
+                Debug.LogWarning("[CameraFollow] Player not found in scene.");
+                return; // Không có player thì không follow
+            }
+        }
 
         // Di chuyển camera theo player, duy trì offset
         Vector3 targetPosition = player.position + offset;

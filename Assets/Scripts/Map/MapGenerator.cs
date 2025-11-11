@@ -2,162 +2,302 @@ using UnityEngine;
 using System.Collections.Generic;
 using UnityEditor;
 using System.Linq;
-using SampleCosmoRun;
 
 public class MapGenerator : Singleton<MapGenerator>
 {
     [Header("References")]
     [SerializeField] private Transform player;
-    [SerializeField] private float unitSize = 2f;
+    [SerializeField] private GameObject playerPrefab; // Prefab của player
+    [SerializeField] private Transform mapRoot;       // Parent cho các cube đang active
+    [SerializeField] private float unitSize = 2f; // (legacy) không còn dùng để tính world pos
+    [Header("Cube Spacing Settings")]
+    [SerializeField] private float cubeSize = 4.5f; // kích thước cạnh mỗi cube (fallback)
+    [SerializeField] private float gap = 0.2f;      // khoảng cách giữa hai cube kế tiếp (fallback)
     [SerializeField] private int initialCubes = 15;
     [SerializeField] private int maxCubes = 20;
-
-    [Header("Cube Prefab Settings")]
-    [Tooltip("Prefab bounds center from mesh, typically (0,1,0) for bottom-pivot cube")]
-    [SerializeField] private Vector3 prefabBoundsCenter = new(0f, 1f, 0f);
-    [Tooltip("Prefab bounds size from mesh, typically (2,2,2) for a 2x2x2 cube")]
-    [SerializeField] private Vector3 prefabBoundsSize = new(2f, 2f, 2f);
-    [Tooltip("Gap (world units) between adjacent cubes")]
-    [SerializeField] private float cubeGap = 0.2f;
-
-    private int dirCounter = 0;
+    [SerializeField] private float distPlayerAndLastCube = 80f; // Khoảng cách kích hoạt spawn cube mới
     private readonly Dictionary<Vector3, PathSegment> cubeMap = new();
     private readonly List<PathSegment> activeCubes = new();
-    
-    // Track cube positions using SampleCubeGroup
-    [SerializeField] private SampleCosmoRun.SampleCubeGroup cubeGroup;
 
     private Vector3 currentGrid = Vector3.zero;
     private PathSegment.TurnDir currentDir = PathSegment.TurnDir.Straight;
 
+    // Spacing đo từ bounds của model (khởi tạo lazy lần đầu spawn)
+    private bool spacingInitialized = false;
+    private float spacingX;
+    private float spacingZ;
+    private Vector3 placementOffset = Vector3.zero; // dịch pivot để tâm mesh nằm đúng grid
+
+    [Header("Boot" )]
+    [SerializeField] private bool autoSpawnOnStart = false; // Dành cho chạy độc lập không qua GameManager
+
     private void Start()
     {
-        if (cubeGroup == null)
-            cubeGroup = gameObject.AddComponent<SampleCosmoRun.SampleCubeGroup>();
+        // Tạo mapRoot nếu chưa có
+        if (mapRoot == null)
+        {
+            var go = new GameObject("MapRoot");
+            mapRoot = go.transform;
+        }
 
-        cubeGroup.PrefabBoundsCenter = prefabBoundsCenter;
-        cubeGroup.PrefabBoundsSize = prefabBoundsSize;
-
-        SpawnMap();
+        if (autoSpawnOnStart)
+            SpawnMap();
     }
 
     public void SpawnMap()
     {
-        ClearMap();
-        dirCounter = 0;
         for (int i = 0; i < initialCubes; i++) SpawnNextCube();
+        
+        // Spawn player ở giữa trên cube đầu tiên
+        if (activeCubes.Count > 0)
+        {
+            SpawnPlayer();
+        }
+    }
+
+    private void SpawnPlayer()
+    {
+        // Nếu player chưa tồn tại, tạo mới
+        if (player == null && playerPrefab != null)
+        {
+            GameObject playerObj = Instantiate(playerPrefab);
+            player = playerObj.transform;
+        }
+
+        if (player != null && activeCubes.Count > 0)
+        {
+            // Lấy cube đầu tiên
+            PathSegment firstCube = activeCubes[0];
+            
+            // Tính top Y của cube đầu tiên
+            var cubeCol = firstCube.GetComponent<Collider>();
+            float cubeTopY = /*cubeCol != null ? cubeCol.bounds.max.y : */firstCube.transform.position.y /*+ cubeSize * 0.5f*/;
+
+            // Chiều cao player
+            var playerCol = player.GetComponent<Collider>();
+
+            // Vị trí spawn: chính giữa mặt trên cube
+            Vector3 spawnPos = new Vector3(
+                firstCube.transform.position.x,
+                Mathf.Abs(firstCube.transform.position.y),
+                firstCube.transform.position.z
+            );
+            
+            // Initialize player
+            PlayerController playerController = player.GetComponent<PlayerController>();
+            if (playerController != null)
+            {
+                playerController.Initialize(spawnPos, firstCube);
+            }
+            else
+            {
+                player.position = spawnPos;
+            }
+        }
     }
 
     public void ClearMap()
     {
-        ObjectPool.Instance.RemovePool();
+        // Trả các cube đang active về pool
+        for (int i = 0; i < activeCubes.Count; i++)
+        {
+            var seg = activeCubes[i];
+            if (seg != null)
+            {
+                ObjectPool.Instance.Return(seg.gameObject);
+            }
+        }
+
+        activeCubes.Clear();
         cubeMap.Clear();
         currentGrid = Vector3.zero;
-        if (cubeGroup != null)
-        {
-            cubeGroup.Clear();
-        }
+        currentDir = PathSegment.TurnDir.Straight;
+        spacingInitialized = false; // đo lại sau khi clear
+
+        // Chỉ dọn pool nếu bạn muốn thực sự hủy các instance nhàn rỗi
+        ObjectPool.Instance.RemovePool();
     }
 
     private void Update()
     {
-        if (activeCubes.Count == 0) return;
-
-        // Spawn more when player is near the end
+        // Spawn thêm khi player gần cuối đường
         float dist = Vector3.Distance(player.position, activeCubes[^1].transform.position);
-        if (dist < 10f)
-        {
-            SpawnNextCube();
-        }
+        if (dist < distPlayerAndLastCube) SpawnNextCube();
 
-        // Limit cube count in scene
+        // Trả những cube phía sau player về pool khi đã cách 1-2 ô
+        TrimBehindCubes(keepBehind: 4);
+
+        // Giới hạn số lượng cube trong scene
         if (activeCubes.Count > maxCubes)
         {
             var old = activeCubes[0];
             activeCubes.RemoveAt(0);
             cubeMap.Remove(old.gridPos);
             ObjectPool.Instance.Return(old.gameObject);
-            // Remove from cube group too
-            if (cubeGroup != null) cubeGroup.RemoveTailFace();
         }
     }
 
-    private bool SpawnNextCube()
+    // Giữ lại một số ô phía sau player, còn lại trả về pool
+    private void TrimBehindCubes(int keepBehind)
     {
-        // Create a new cube at next grid position
-        Vector3 nextGrid = (activeCubes.Count == 0) ? Vector3.zero : GetNextGrid(currentGrid, GetNextValidDirection());
+        if (player == null || activeCubes.Count == 0) return;
 
-        // Skip if position already occupied
-        if (cubeMap.ContainsKey(nextGrid)) return false;
+        // Tìm cube gần player nhất theo khoảng cách world
+        int nearestIndex = -1;
+        float nearestSqr = float.PositiveInfinity;
+        Vector3 p = player.position;
+        for (int i = 0; i < activeCubes.Count; i++)
+        {
+            var seg = activeCubes[i];
+            if (seg == null) continue;
+            float d = (seg.transform.position - p).sqrMagnitude;
+            if (d < nearestSqr)
+            {
+                nearestSqr = d;
+                nearestIndex = i;
+            }
+        }
 
+        if (nearestIndex <= 0) return;
+
+        int removeCount = Mathf.Max(0, nearestIndex - keepBehind);
+        if (removeCount == 0) return;
+
+        for (int i = 0; i < removeCount; i++)
+        {
+            var seg = activeCubes[0];
+            activeCubes.RemoveAt(0);
+            if (seg != null)
+            {
+                cubeMap.Remove(seg.gridPos);
+                ObjectPool.Instance.Return(seg.gameObject);
+            }
+        }
+    }
+
+    private void SpawnNextCube()
+    {
         var prefabObj = ObjectPool.Instance.Get();
+        if (prefabObj == null)
+        {
+            // Nếu pool đã hết, tạm thời tăng thêm bằng cách yêu cầu pool tạo thêm (tùy chọn) hoặc bỏ qua spawn frame này
+            Debug.LogWarning("[MapGenerator] Pool exhausted. Skipping spawn this frame.");
+            return;
+        }
+
         var seg = prefabObj.GetComponent<PathSegment>();
         if (seg == null) seg = prefabObj.AddComponent<PathSegment>();
 
+        // ✅ Với cube đầu tiên, luôn đặt tại (0,0,0)
+        PathSegment.TurnDir nextDir; //= currentDir == PathSegment.TurnDir.Straight ? PathSegment.TurnDir.Straight : GetNextValidDirection();
+        if (activeCubes.Count <= Random.Range(3,5))
+        {
+            nextDir = PathSegment.TurnDir.Straight;
+        } else nextDir = GetNextValidDirection();
+        Vector3 nextGrid = (activeCubes.Count == 0) ? Vector3.zero : GetNextGrid(currentGrid, nextDir);
 
-        // Initialize segment (using straight path for now, can be enhanced with SampleCubeFace.Direction)
-        seg.Init(nextGrid, PathSegment.TurnDir.Straight, PathSegment.FaceType.Top);
+        // Nếu trùng cube → bỏ qua
+        if (cubeMap.ContainsKey(nextGrid))
+        {
+            ObjectPool.Instance.Return(prefabObj);
+            return;
+        }
 
-        // Position using grid-based world position, add small gap between cubes but do NOT change prefab scale
-        float spacing = prefabBoundsSize.y + cubeGap;
-        prefabObj.transform.position = new Vector3(nextGrid.x * spacing, nextGrid.y * spacing, nextGrid.z * spacing);
+        seg.Init(nextGrid, nextDir, PathSegment.FaceType.Top);
+
+        // Khởi tạo spacing nếu chưa có (đo từ Renderer/Collider bounds)
+        if (!spacingInitialized)
+        {
+            InitializeSpacing(prefabObj);
+        }
+
+        // Tính center mong muốn của cube theo grid (luôn nằm trên mặt phẳng Y=0)
+        Vector3 desiredCenter = new Vector3(
+            seg.gridPos.x * spacingX,
+            0f,
+            seg.gridPos.z * spacingZ
+        );
+
+        // Đưa mesh (pivot lệch) vào đúng center bằng cách worldPos = desiredCenter - placementOffset
+        Vector3 worldPos = desiredCenter - placementOffset;
+        prefabObj.transform.position = worldPos;
+        
         prefabObj.transform.rotation = Quaternion.identity;
 
         cubeMap[nextGrid] = seg;
         activeCubes.Add(seg);
+
+        currentDir = nextDir;
         currentGrid = nextGrid;
 
         prefabObj.SetActive(true);
-        return true;
+    }
+
+    // Đo kích thước thực tế của model để tính spacing (center-to-center)
+    private void InitializeSpacing(GameObject sample)
+    {
+        Bounds bounds;
+        bool hasBounds = false;
+
+        var renderers = sample.GetComponentsInChildren<Renderer>();
+        if (renderers != null && renderers.Length > 0)
+        {
+            bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            hasBounds = true;
+        }
+        else
+        {
+            var colliders = sample.GetComponentsInChildren<Collider>();
+            if (colliders != null && colliders.Length > 0)
+            {
+                bounds = colliders[0].bounds;
+                for (int i = 1; i < colliders.Length; i++) bounds.Encapsulate(colliders[i].bounds);
+                hasBounds = true;
+            }
+            else
+            {
+                bounds = new Bounds(sample.transform.position, new Vector3(cubeSize, cubeSize, cubeSize));
+            }
+        }
+
+    float fallback = cubeSize + gap;
+    spacingX = hasBounds ? bounds.size.x + gap : fallback;
+    spacingZ = hasBounds ? bounds.size.z + gap : fallback;
+
+    // Tính offset để đưa tâm mesh đúng tại tọa độ grid (pivot có thể không ở giữa)
+    Vector3 center = hasBounds ? bounds.center : sample.transform.position;
+    Vector3 pivot = sample.transform.position;
+    // Để khi đặt worldPos = -placementOffset, mesh center đặt tại (0,0,0)
+    placementOffset = center - pivot;
+        spacingInitialized = true;
+        // Debug.Log($"[MapGenerator] spacingX={spacingX:F2}, spacingZ={spacingZ:F2}");
     }
 
     private PathSegment.TurnDir GetNextValidDirection()
     {
-        var all = new Dictionary<PathSegment.TurnDir, float>()
+        // Danh sách tất cả hướng có thể
+        var allDirections = new List<PathSegment.TurnDir>()
         {
-            {PathSegment.TurnDir.Left, 20f},
-            {PathSegment.TurnDir.Right, 20f},
-            {PathSegment.TurnDir.UpLeft, 5f},
-            {PathSegment.TurnDir.DownLeft, 5f},
-            {PathSegment.TurnDir.UpRight, 5f},
-            {PathSegment.TurnDir.DownRight, 5f},
-            {PathSegment.TurnDir.Straight, 40f}
+            PathSegment.TurnDir.Left,
+            PathSegment.TurnDir.Right,
+            PathSegment.TurnDir.UpLeft,
+            PathSegment.TurnDir.DownLeft,
+            PathSegment.TurnDir.UpRight,
+            PathSegment.TurnDir.DownRight,
+            PathSegment.TurnDir.Straight
         };
 
         // Bỏ hướng ngược lại để tránh đảo chiều
         if (currentDir != PathSegment.TurnDir.Straight)
         {
             PathSegment.TurnDir opposite = GetOpposite(currentDir);
-            all.Remove(opposite);
+            allDirections.Remove(opposite);
         }
 
-        // Chọn random trong danh sách hợp lệ
-        PathSegment.TurnDir dir = ChooseDir(all);
-
-        return dir;
-    }
-
-    private PathSegment.TurnDir ChooseDir(Dictionary<PathSegment.TurnDir, float> validDirs)
-    {
-        // 7 trường hợp: Straight tỉ lệ cao nhất ~ giữ hướng di chuyển không đổi
-        // 6 trường hợp còn lại tỉ lệ bằng nhau
-        float totalWeight = 0f;
-        foreach (var kv in validDirs)
-            totalWeight += kv.Value;
-
-        // Thay vì random, dùng chia lấy dư
-        float value = dirCounter % totalWeight;
-        dirCounter++;
-
-        float cumulative = 0f;
-        foreach (var kv in validDirs)
-        {
-            cumulative += kv.Value;
-            if (value < cumulative)
-                return kv.Key;
-        }
-
-        return validDirs.Keys.First();
+        // Chọn random trong danh sách hợp lệ (tỉ lệ đều nhau)
+        int randomIndex = Random.Range(0, allDirections.Count);
+        return allDirections[randomIndex];
     }
 
     private PathSegment.TurnDir GetOpposite(PathSegment.TurnDir dir)
@@ -176,14 +316,16 @@ public class MapGenerator : Singleton<MapGenerator>
 
     private Vector3 GetNextGrid(Vector3 pos, PathSegment.TurnDir dir)
     {
+        // ✅ SỬA: Đồng bộ với hướng player (Z = forward, X = left/right)
         switch (dir)
         {
-            case PathSegment.TurnDir.Left: return pos + new Vector3(-1, 0, 0);
-            case PathSegment.TurnDir.Right: return pos + new Vector3(1, 0, 0);
-            case PathSegment.TurnDir.UpLeft: return pos + new Vector3(-1, 1, 0);
-            case PathSegment.TurnDir.DownLeft: return pos + new Vector3(-1, -1, 0);
-            case PathSegment.TurnDir.UpRight: return pos + new Vector3(1, 1, 0);
-            case PathSegment.TurnDir.DownRight: return pos + new Vector3(1, -1, 0);
+            case PathSegment.TurnDir.Straight:   return pos + new Vector3(0, 0, 1);   // Thẳng về phía trước (Z+)
+            case PathSegment.TurnDir.Left:       return pos + new Vector3(-1, 0, 0);  // Rẽ trái (X-)
+            case PathSegment.TurnDir.Right:      return pos + new Vector3(1, 0, 0);   // Rẽ phải (X+)
+            case PathSegment.TurnDir.UpLeft:     return pos + new Vector3(-1, 0, 1);  // Trái + Thẳng (X- Z+)
+            case PathSegment.TurnDir.DownLeft:   return pos + new Vector3(-1, 0, -1); // Trái + Lùi (X- Z-)
+            case PathSegment.TurnDir.UpRight:    return pos + new Vector3(1, 0, 1);   // Phải + Thẳng (X+ Z+)
+            case PathSegment.TurnDir.DownRight:  return pos + new Vector3(1, 0, -1);  // Phải + Lùi (X+ Z-)
             default: return pos + new Vector3(0, 0, 1);
         }
     }
