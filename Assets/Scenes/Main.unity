@@ -303,7 +303,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 45
+  orthographic size: 55
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -473,7 +473,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   player: {fileID: 0}
   playerPrefab: {fileID: 1775217572484885849, guid: bc42d893f94874698ac845f73bcdd246, type: 3}
-  mapRoot: {fileID: 0}
   unitSize: 2
   cubeSize: 4.5
   gap: 0.2
@@ -481,7 +480,7 @@ MonoBehaviour:
   maxCubes: 15
   distPlayerAndLastCube: 80
   allowDiagonal: 0
-  initialStraightCount: 4
+  initialStraightCount: 3
   autoSpawnOnStart: 1
 --- !u!4 &1303111504
 Transform:
