@@ -303,7 +303,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 70
+  orthographic size: 45
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -480,7 +480,9 @@ MonoBehaviour:
   initialCubes: 12
   maxCubes: 15
   distPlayerAndLastCube: 80
-  autoSpawnOnStart: 0
+  allowDiagonal: 0
+  initialStraightCount: 4
+  autoSpawnOnStart: 1
 --- !u!4 &1303111504
 Transform:
   m_ObjectHideFlags: 0

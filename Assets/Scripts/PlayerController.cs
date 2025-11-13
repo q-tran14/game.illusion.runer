@@ -5,12 +5,13 @@ public class PlayerController : Singleton<PlayerController>
     [Header("Movement Settings")]
     [SerializeField] private float speed = 15f;
     [SerializeField] private float rotationSpeed = 10f;
+    [SerializeField] private bool autoTurn = true; // Tự động rẽ theo hướng đã được định trước (segment.direction)
+    [SerializeField] private float centeringSpeed = 5f; // Tốc độ kéo về giữa cube
     
     [Header("State")]
     private Vector3 moveDirection = Vector3.forward;
     private PathSegment currentSegment;
-    private PathSegment nextSegment;
-    private bool canTurn = false;
+    // Không dùng cơ chế 'nextSegment' nữa; hướng được lấy từ segment hiện tại
     private bool isAlive = true;
     private bool isOnPath = false;
     private Rigidbody rb;
@@ -48,6 +49,50 @@ public class PlayerController : Singleton<PlayerController>
         // Di chuyển player theo hướng hiện tại
         transform.position += moveDirection * speed * Time.deltaTime;
 
+        // Kéo player về giữa cube hiện tại (chống trôi ra mép)
+        if (currentSegment != null)
+        {
+            Vector3 cubeCenter = currentSegment.transform.position;
+            
+            // Tính mặt trên của cube
+            Collider cubeCollider = currentSegment.GetComponent<Collider>();
+            float cubeTopY = cubeCollider != null ? cubeCollider.bounds.max.y : cubeCenter.y;
+            
+            Vector3 currentPos = transform.position;
+            Vector3 targetPos = currentPos;
+            
+            // Luôn kéo player về Y của mặt trên cube
+            targetPos.y = Mathf.Lerp(currentPos.y, cubeTopY, centeringSpeed * Time.deltaTime);
+            
+            // Xác định trục cần điều chỉnh dựa vào hướng di chuyển
+            if (Mathf.Abs(moveDirection.x) > 0.5f) // Đi ngang (Left/Right)
+            {
+                // Kéo về center theo Z (giữa hàng)
+                targetPos.z = Mathf.Lerp(currentPos.z, cubeCenter.z, centeringSpeed * Time.deltaTime);
+            }
+            else if (Mathf.Abs(moveDirection.z) > 0.5f) // Đi thẳng (Forward/Back)
+            {
+                // Kéo về center theo X (giữa cột)
+                targetPos.x = Mathf.Lerp(currentPos.x, cubeCenter.x, centeringSpeed * Time.deltaTime);
+            }
+            else if (Mathf.Abs(moveDirection.y) > 0.5f) // Đi dọc (Up/Down)
+            {
+                // Kéo về center theo cả X và Z
+                targetPos.x = Mathf.Lerp(currentPos.x, cubeCenter.x, centeringSpeed * Time.deltaTime);
+                targetPos.z = Mathf.Lerp(currentPos.z, cubeCenter.z, centeringSpeed * Time.deltaTime);
+            }
+            else // Diagonal
+            {
+                // Kéo về các trục không chủ yếu
+                if (Mathf.Abs(moveDirection.x) < 0.3f)
+                    targetPos.x = Mathf.Lerp(currentPos.x, cubeCenter.x, centeringSpeed * Time.deltaTime);
+                if (Mathf.Abs(moveDirection.z) < 0.3f)
+                    targetPos.z = Mathf.Lerp(currentPos.z, cubeCenter.z, centeringSpeed * Time.deltaTime);
+            }
+            
+            transform.position = targetPos;
+        }
+
         // Xoay mượt player theo hướng di chuyển
         if (moveDirection != Vector3.zero)
         {
@@ -55,39 +100,28 @@ public class PlayerController : Singleton<PlayerController>
             transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
 
-        // Click chuột trái để turn khi có thể
-        if (Input.GetMouseButtonDown(0) && canTurn && nextSegment != null)
+        // Hướng di chuyển luôn theo direction của currentSegment
+        if (autoTurn && currentSegment != null)
         {
-            TurnToDirection(nextSegment.direction);
-            currentSegment = nextSegment;
-            nextSegment = null;
-            canTurn = false;
+            ApplySegmentDirection(currentSegment.direction);
         }
     }
 
     void OnTriggerEnter(Collider other)
     {
-        // Phát hiện cube tiếp theo - CHỜ CLICK ĐỂ TURN
-        if (other.CompareTag("PathCube"))
-        {
-            var segment = other.GetComponent<PathSegment>();
-            if (segment != null && segment != currentSegment)
-            {
-                // Lưu segment tiếp theo, chờ player click để turn
-                nextSegment = segment;
-                canTurn = true;
-                isOnPath = true;
-            }
-        }
+        if (!isAlive) return;
+        if (!other.CompareTag("PathCube")) return;
+
+        var segment = other.GetComponent<PathSegment>();
+        if (segment == null) return;
+
+        currentSegment = segment;
+        isOnPath = true;
     }
 
     void OnTriggerStay(Collider other)
     {
-        // Player vẫn ở trên path
-        if (other.CompareTag("PathCube"))
-        {
-            isOnPath = true;
-        }
+        if (other.CompareTag("PathCube")) isOnPath = true;
     }
 
     void OnTriggerExit(Collider other)
@@ -110,63 +144,32 @@ public class PlayerController : Singleton<PlayerController>
     private void CheckGameOver()
     {
         // Nếu player không còn trên path và chưa vào cube mới → Game Over
-        if (!isOnPath && isAlive)
-        {
-            GameOver();
-        }
+        if (!isOnPath && isAlive) GameOver();
     }
 
-    private void TurnToDirection(PathSegment.TurnDir turnDir)
+    private void ApplySegmentDirection(PathSegment.TurnDir turnDir)
     {
-        // ✅ Chuyển đổi TurnDir thành hướng di chuyển 3D
-        // Đồng bộ với MapGenerator: Z = forward, X = left/right
-        Vector3 newDirection = Vector3.forward;
-        
+        Vector3 dir = moveDirection;
         switch (turnDir)
         {
-            case PathSegment.TurnDir.Straight:
-                // Tiếp tục đi thẳng về phía trước
-                newDirection = Vector3.forward; // (0, 0, 1)
-                break;
-            case PathSegment.TurnDir.Left:
-                // Rẽ trái
-                newDirection = Vector3.left; // (-1, 0, 0)
-                break;
-            case PathSegment.TurnDir.Right:
-                // Rẽ phải
-                newDirection = Vector3.right; // (1, 0, 0)
-                break;
-            case PathSegment.TurnDir.UpLeft:
-                // Rẽ trái + tiếp tục thẳng (chéo)
-                newDirection = (Vector3.left + Vector3.forward).normalized; // (-1, 0, 1)
-                break;
-            case PathSegment.TurnDir.DownLeft:
-                // Rẽ trái + lùi lại (chéo ngược)
-                newDirection = (Vector3.left + Vector3.back).normalized; // (-1, 0, -1)
-                break;
-            case PathSegment.TurnDir.UpRight:
-                // Rẽ phải + tiếp tục thẳng (chéo)
-                newDirection = (Vector3.right + Vector3.forward).normalized; // (1, 0, 1)
-                break;
-            case PathSegment.TurnDir.DownRight:
-                // Rẽ phải + lùi lại (chéo ngược)
-                newDirection = (Vector3.right + Vector3.back).normalized; // (1, 0, -1)
-                break;
+            case PathSegment.TurnDir.Straight: dir = Vector3.forward; break;
+            case PathSegment.TurnDir.Left: dir = Vector3.left; break;
+            case PathSegment.TurnDir.Right: dir = Vector3.right; break;
+            case PathSegment.TurnDir.UpLeft: dir = (Vector3.left + Vector3.up).normalized; break;
+            case PathSegment.TurnDir.DownLeft: dir = (Vector3.left + Vector3.down).normalized; break;
+            case PathSegment.TurnDir.UpRight: dir = (Vector3.right + Vector3.up).normalized; break;
+            case PathSegment.TurnDir.DownRight: dir = (Vector3.right + Vector3.down).normalized; break;
         }
-
-        moveDirection = newDirection;
-        Debug.Log($"Player turned to {turnDir} - Direction: {newDirection}");
+        if (dir != moveDirection) moveDirection = dir;
     }
 
     public void Initialize(Vector3 startPos, PathSegment startSegment)
     {
         transform.position = startPos;
         currentSegment = startSegment;
-        nextSegment = null;
         moveDirection = Vector3.forward;
         isAlive = true;
         isOnPath = true;
-        canTurn = false;
         transform.rotation = Quaternion.identity;
         
         Debug.Log($"Player initialized at {startPos}");

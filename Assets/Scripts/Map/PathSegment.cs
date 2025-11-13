@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class PathSegment : MonoBehaviour
 {
-    public enum FaceType { Top, Left, Right }       // Left Rot: -90 0 0 | Right Rot: -90 -90 0
+    public enum FaceType { Top, Left, Right }
     public enum TurnDir { Straight, Left, Right, UpLeft, DownLeft, UpRight, DownRight }
 
     public Vector3 gridPos;                         // Tọa độ lưới logic (x, y, z)
