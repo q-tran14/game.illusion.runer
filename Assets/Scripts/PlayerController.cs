@@ -14,6 +14,7 @@ public class PlayerController : Singleton<PlayerController>
     // Không dùng cơ chế 'nextSegment' nữa; hướng được lấy từ segment hiện tại
     private bool isAlive = true;
     private bool isOnPath = false;
+    private bool canMove = false; // Chỉ cho phép di chuyển khi map ready
     private Rigidbody rb;
 
     protected override void Awake()
@@ -44,7 +45,7 @@ public class PlayerController : Singleton<PlayerController>
 
     void Update()
     {
-        if (!isAlive) return;
+        if (!isAlive || !canMove) return;
 
         // Di chuyển player theo hướng hiện tại
         transform.position += moveDirection * speed * Time.deltaTime;
@@ -170,9 +171,28 @@ public class PlayerController : Singleton<PlayerController>
         moveDirection = Vector3.forward;
         isAlive = true;
         isOnPath = true;
+        canMove = false; // Mặc định không cho di chuyển cho đến khi gọi EnableMovement()
         transform.rotation = Quaternion.identity;
         
         Debug.Log($"Player initialized at {startPos}");
+    }
+
+    /// <summary>
+    /// Cho phép player di chuyển (gọi sau khi loading xong)
+    /// </summary>
+    public void EnableMovement()
+    {
+        canMove = true;
+        Debug.Log("[PlayerController] Movement enabled.");
+    }
+
+    /// <summary>
+    /// Tắt di chuyển (dùng khi pause, loading, v.v.)
+    /// </summary>
+    public void DisableMovement()
+    {
+        canMove = false;
+        Debug.Log("[PlayerController] Movement disabled.");
     }
 
     private void GameOver()

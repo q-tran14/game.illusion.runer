@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: PathCubeDecors3
+  m_EditorClassIdentifier: 
+  m_GroupName: PathCubeDecors3
+  m_Data:
+    m_SerializedData: []
+  m_GUID: d1b82db7f2483450da4b5ee08db06c78
+  m_SerializeEntries:
+  - m_GUID: 39ff4cd032ec24716932c8c76296143e
+    m_Address: Grassmushroom
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8e7e37fd0bb164e72a594f63964128e2
+    m_Address: Grass1
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9383eb60dc8484570bdac8c21045fa0e
+    m_Address: Grassflower1
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9ce07110236764491ac74dff7b7cafcb
+    m_Address: Grassflower2
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b78b548869862423eab5507da6d24cb5
+    m_Address: Nograss
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e1e5180a351ba4db39b9df879e26c39d
+    m_Address: Grass3
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e8cd4782c6927498e90288436ba3c1ce
+    m_Address: Grass2
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 8ac24e3364698408dbd52f1ea9f23531, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 74ca22e10153c44edbae3c5675f3ad4a, type: 2}
+    - {fileID: 11400000, guid: f310951cc93614ff2968024e76bac371, type: 2}

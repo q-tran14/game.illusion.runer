@@ -69,7 +69,8 @@ PrefabInstance:
       value: Player
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 8164078558771037576, guid: 61d6ecbd80cc24741b2f50fa13fa2251, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 61d6ecbd80cc24741b2f50fa13fa2251, type: 3}
@@ -96,10 +97,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 041d38ee63cb9424dae5461a106eea30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  speed: 20
-  rotationSpeed: 20
+  speed: 10
+  rotationSpeed: 10
   autoTurn: 1
-  centeringSpeed: 5
+  centeringSpeed: 10
 --- !u!65 &5629035667088961693
 BoxCollider:
   m_ObjectHideFlags: 0

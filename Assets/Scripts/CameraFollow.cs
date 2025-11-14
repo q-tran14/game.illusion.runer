@@ -11,6 +11,8 @@ public class CameraFollow : MonoBehaviour
 
     [SerializeField] private Vector3 fixedRotation = new Vector3 (40f, -45f, 0f);
 
+    private bool hasWarnedOnce = false; // Chỉ warn 1 lần để tránh spam console
+
     void Start()
     {
         // Tự động tìm player nếu chưa assign
@@ -29,17 +31,23 @@ public class CameraFollow : MonoBehaviour
 
     void LateUpdate()
     {
-        // Tự động tìm player nếu bị mất (vd: sau khi restart)
+        // Tự động tìm player nếu bị mất (vd: sau khi restart hoặc đang load async)
         if (player == null)
         {
             GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
             if (playerObj != null)
             {
                 player = playerObj.transform;
+                hasWarnedOnce = false; // Reset warning khi tìm thấy
             }
             else
             {
-                Debug.LogWarning("[CameraFollow] Player not found in scene.");
+                // Chỉ warn 1 lần để tránh spam console mỗi frame
+                if (!hasWarnedOnce)
+                {
+                    Debug.LogWarning("[CameraFollow] Player not found in scene. Waiting for spawn...");
+                    hasWarnedOnce = true;
+                }
                 return; // Không có player thì không follow
             }
         }

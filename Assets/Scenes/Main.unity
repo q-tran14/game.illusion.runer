@@ -191,7 +191,7 @@ Light:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RenderingLayerMask: 1
-  m_Lightmapping: 1
+  m_Lightmapping: 2
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
   m_BounceIntensity: 1
@@ -303,7 +303,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 55
+  orthographic size: 45
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -481,6 +481,12 @@ MonoBehaviour:
   distPlayerAndLastCube: 80
   allowDiagonal: 0
   initialStraightCount: 3
+  environments:
+  - {fileID: 11400000, guid: 4890a8a4401a24888adf86680678c389, type: 2}
+  - {fileID: 11400000, guid: 1612ad195e8c84d518b15e1c4eb39727, type: 2}
+  - {fileID: 11400000, guid: 3b7793f584d484a9aae8c17a70c936d2, type: 2}
+  - {fileID: 11400000, guid: dcac25ec7dac64778b949803a9e3d49e, type: 2}
+  currentEnvironmentIndex: 1
   autoSpawnOnStart: 1
 --- !u!4 &1303111504
 Transform:
@@ -507,6 +513,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1725157706}
   - component: {fileID: 1725157705}
+  - component: {fileID: 1725157707}
   m_Layer: 0
   m_Name: Object Pooling Manager
   m_TagString: Untagged
@@ -526,7 +533,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 761b02e52c65d47cf8cd0e932cb71885, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  prefab: {fileID: 5376490540081603802, guid: c8534a818d9be4418876339b01ab8185, type: 3}
+  defaultEmptyPrefab: {fileID: 5376490540081603802, guid: c8534a818d9be4418876339b01ab8185, type: 3}
   minPoolSize: 12
   maxPoolSize: 15
   configureCollider: 1
@@ -549,6 +556,25 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1725157707
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1725157704}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d890419338cf24eadb50725d972a09f0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  usePlayerDecor: 1
+  playerDecorLibrary: {fileID: 11400000, guid: d8e7faa54f3cd46f18a63fb1545306d7, type: 2}
+  playerDecorIndex: 6
+  useCoinDecor: 0
+  coinDecorLibrary: {fileID: 11400000, guid: a22902770235f45beb782e5e90d0726c, type: 2}
+  coinDecorMode: 2
+  coinDecorIndex: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

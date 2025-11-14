@@ -25,6 +25,7 @@ public class GameManager : Singleton<GameManager>
 
     protected override void Awake()
     {
+        // Application.targetFrameRate = 60;
         base.Awake();
         LoadHighScore();
     }

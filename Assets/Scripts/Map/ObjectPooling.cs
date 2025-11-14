@@ -4,7 +4,7 @@ using System.Collections.Generic;
 public class ObjectPool : Singleton<ObjectPool>
 {
     [Header("Pool Settings")]
-    [SerializeField] private GameObject prefab;
+    [SerializeField] private GameObject defaultEmptyPrefab;
     [SerializeField] private int minPoolSize = 12;
     [SerializeField] private int maxPoolSize = 15;
 
@@ -40,28 +40,81 @@ public class ObjectPool : Singleton<ObjectPool>
         }
     }
 
-    public GameObject Get()
+    public async System.Threading.Tasks.Task<GameObject> GetAsync()
     {
+        GameObject obj = null;
+        
         // Nếu có sẵn trong pool → dùng lại
         if (pool.Count > 0)
         {
-            var obj = pool.Dequeue();
-            obj.SetActive(true);
-            return obj;
+            obj = pool.Dequeue();
         }
-
         // Nếu chưa tới giới hạn → tạo mới
-        if (totalCreated < maxPoolSize)
+        else if (totalCreated < maxPoolSize)
         {
-            var newObj = CreateNewInstance();
-            newObj.SetActive(true);
-            return newObj;
+            obj = CreateNewInstance();
         }
-
-        // Đạt giới hạn → không tạo mới, trả null cho caller tự xử lý (có thể tăng maxPoolSize)
-        Debug.LogWarning($"[ObjectPool] Max pool size ({maxPoolSize}) reached. Consider increasing maxPoolSize.");
-        return null;
+        else
+        {
+            // Đạt giới hạn → không tạo mới, trả null
+            Debug.LogWarning($"[ObjectPool] Max pool size ({maxPoolSize}) reached. Consider increasing maxPoolSize.");
+            return null;
+        }
+        
+        // Apply decor async ngay trước khi trả về
+        await ApplyDecorToObjectAsync(obj);
+        obj.SetActive(true);
+        return obj;
     }
+
+    // Sync version (backward compatible - DEPRECATED: use GetAsync instead)
+    public GameObject Get()
+    {
+        Debug.LogWarning("[ObjectPool] Get() is deprecated. Use GetAsync() for better performance.");
+        GameObject obj = null;
+        
+        // Nếu có sẵn trong pool → dùng lại
+        if (pool.Count > 0)
+        {
+            obj = pool.Dequeue();
+        }
+        // Nếu chưa tới giới hạn → tạo mới
+        else if (totalCreated < maxPoolSize)
+        {
+            obj = CreateNewInstance();
+        }
+        else
+        {
+            // Đạt giới hạn → không tạo mới, trả null
+            Debug.LogWarning($"[ObjectPool] Max pool size ({maxPoolSize}) reached. Consider increasing maxPoolSize.");
+            return null;
+        }
+        
+        // No decor applied in sync version - use GetAsync() instead
+        obj.SetActive(true);
+        return obj;
+    }
+    
+    private async System.Threading.Tasks.Task ApplyDecorToObjectAsync(GameObject obj)
+    {
+        if (obj == null) return;
+        
+        var applicator = obj.GetComponent<DecorApplicator>();
+        if (applicator != null)
+        {
+            // Lấy decor từ MapGenerator environment
+            var mapGen = MapGenerator.Instance;
+            if (mapGen != null)
+            {
+                var decorAssetRef = mapGen.GetPathDecorAssetRef();
+                if (decorAssetRef != null && decorAssetRef.RuntimeKeyIsValid())
+                {
+                    await applicator.ApplyAsync(decorAssetRef);
+                }
+            }
+        }
+    }
+
 
     public void Return(GameObject obj)
     {
@@ -85,14 +138,27 @@ public class ObjectPool : Singleton<ObjectPool>
 
     private GameObject CreateNewInstance()
     {
-        var newObj = Instantiate(prefab, transform);
+        var newObj = Instantiate(defaultEmptyPrefab, transform);
         newObj.transform.localScale = new Vector3(4.5f, 4.5f, 4.5f);
-        newObj.name = prefab.name + "_Pooled";
+        newObj.name = defaultEmptyPrefab.name + "_Pooled";
+        
+        // Tắt renderer của base prefab để tránh đè lên decor
+        var renderers = newObj.GetComponentsInChildren<Renderer>();
+        foreach (var renderer in renderers)
+        {
+            renderer.enabled = false;
+        }
         
         // Thêm PathSegment nếu chưa có
         if (newObj.GetComponent<PathSegment>() == null)
         {
             newObj.AddComponent<PathSegment>();
+        }
+        
+        // Thêm DecorApplicator nếu chưa có (để apply decor sau này)
+        if (newObj.GetComponent<DecorApplicator>() == null)
+        {
+            newObj.AddComponent<DecorApplicator>();
         }
         
         // Thêm BoxCollider nếu chưa có (cho .obj file)

@@ -73,7 +73,8 @@ PrefabInstance:
       value: PathCube
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 8164078558771037576, guid: 87db230c1d1f142738d9430ce01a6355, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 87db230c1d1f142738d9430ce01a6355, type: 3}

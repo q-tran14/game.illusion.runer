@@ -2,8 +2,8 @@ using UnityEngine;
 
 public class PathSegment : MonoBehaviour
 {
-    public enum FaceType { Top, Left, Right }
-    public enum TurnDir { Straight, Left, Right, UpLeft, DownLeft, UpRight, DownRight }
+    public enum FaceType { Top, Back, Right }
+    public enum TurnDir { Straight, Backward, Left, Right, UpLeft, DownLeft, UpRight, DownRight }
 
     public Vector3 gridPos;                         // Tọa độ lưới logic (x, y, z)
     public TurnDir direction;                       // Hướng player đang đi
@@ -22,7 +22,7 @@ public class PathSegment : MonoBehaviour
     {
         switch (face)
         {
-            case FaceType.Left:
+            case FaceType.Back:
                 transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
                 break;
             case FaceType.Right:

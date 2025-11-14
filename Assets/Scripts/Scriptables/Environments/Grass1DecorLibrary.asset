@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6679c0cf684c14cc1829af080a8ebd40, type: 3}
+  m_Name: Grass1DecorLibrary
+  m_EditorClassIdentifier: 
+  items:
+  - m_AssetGUID: b91a5780248a746bf92a0f3a9d8581d5
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_EditorAssetChanged: 0
+  - m_AssetGUID: 208eb1b0dbc5f49479c49842f426beb3
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_EditorAssetChanged: 0
+  - m_AssetGUID: cf4e20a80a8e84f03b7e2ed1251eb5a3
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_EditorAssetChanged: 0
+  - m_AssetGUID: 883b15069657d4a35af6a22aaa735dde
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_EditorAssetChanged: 0
+  - m_AssetGUID: 968ffab4bfff24cfabfc30cae10d9f38
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_EditorAssetChanged: 0
+  - m_AssetGUID: fb944497ae76f495c9bae213e041a4f3
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_EditorAssetChanged: 0
+  - m_AssetGUID: 901adde072b594ffaa204fe7db9b1738
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_EditorAssetChanged: 1

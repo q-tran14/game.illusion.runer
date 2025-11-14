@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: PathCubeDecors2
+  m_EditorClassIdentifier: 
+  m_GroupName: PathCubeDecors2
+  m_Data:
+    m_SerializedData: []
+  m_GUID: 47673a640610f407883b8576f49041e5
+  m_SerializeEntries:
+  - m_GUID: 4a89d8ecb74684f458d06aa5e6dd0344
+    m_Address: Box2
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 58d29f6de82a9416e83dcd5ff878dcb9
+    m_Address: Box1
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 8ac24e3364698408dbd52f1ea9f23531, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 7232879270cc64869836873c572c70f9, type: 2}
+    - {fileID: 11400000, guid: c43a2c6e870514a40b78606938747ed1, type: 2}

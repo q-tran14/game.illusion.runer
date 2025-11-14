@@ -1,5 +1,7 @@
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEditor;
 using System.Linq;
 
@@ -8,14 +10,12 @@ public class MapGenerator : Singleton<MapGenerator>
     [Header("References")]
     [SerializeField] private Transform player;
     [SerializeField] private GameObject playerPrefab; // Prefab của player
-    [SerializeField] private float unitSize = 2f; // (legacy) không còn dùng để tính world pos
     [Header("Cube Spacing Settings")]
     [SerializeField] private float cubeSize = 4.5f; // kích thước cạnh mỗi cube (fallback)
     [SerializeField] private float gap = 0.2f;      // khoảng cách giữa hai cube kế tiếp (fallback)
     [SerializeField] private int initialCubes = 15;
     [SerializeField] private int maxCubes = 20;
     [SerializeField] private float distPlayerAndLastCube = 80f; // Khoảng cách kích hoạt spawn cube mới
-    [SerializeField] private bool allowDiagonal = false; // Không cho spawn chéo (UpLeft, DownLeft, UpRight, DownRight) khi false
     [SerializeField] private int initialStraightCount = 4; // số cube đầu (sau cube gốc) giữ thẳng
     private readonly Dictionary<Vector3, PathSegment> cubeMap = new();
     private readonly List<PathSegment> activeCubes = new();
@@ -29,29 +29,121 @@ public class MapGenerator : Singleton<MapGenerator>
     private float spacingZ;
     private Vector3 placementOffset = Vector3.zero; // dịch pivot để tâm mesh nằm đúng grid
 
+    [Header("Environment Profiles")]
+    [SerializeField] private EnvironmentProfile[] environments = new EnvironmentProfile[3];
+    [SerializeField] private int currentEnvironmentIndex = 0;
+    private EnvironmentProfile activeEnvironment;
+
     [Header("Boot" )]
     [SerializeField] private bool autoSpawnOnStart = false; // Dành cho chạy độc lập không qua GameManager
+
+    // Loading state
+    private bool isLoading = false;
+    private bool isMapReady = false;
+    
+    public bool IsLoading => isLoading;
+    public bool IsMapReady => isMapReady;
+
+    protected override void OnSingletonInit()
+    {
+        base.OnSingletonInit();
+        LoadEnvironment(currentEnvironmentIndex);
+    }
 
     private void Start()
     {
         if (autoSpawnOnStart) SpawnMap();
     }
 
-    public void SpawnMap()
+    private void LoadEnvironment(int index)
     {
-        for (int i = 0; i < initialCubes; i++) SpawnNextCube();
-        
-        // Spawn player ở giữa trên cube đầu tiên
-        if (activeCubes.Count > 0) SpawnPlayer();
+        if (environments == null || environments.Length == 0)
+        {
+            Debug.LogWarning("[MapGenerator] No environments configured.");
+            return;
+        }
+
+        index = Mathf.Clamp(index, 0, environments.Length - 1);
+        currentEnvironmentIndex = index;
+        activeEnvironment = environments[index];
+
+        if (activeEnvironment == null)
+        {
+            Debug.LogWarning($"[MapGenerator] Environment at index {index} is null.");
+            return;
+        }
+
+        Debug.Log($"[MapGenerator] Loaded environment: {activeEnvironment.environmentName} (Total path cubes: {activeEnvironment.GetTotalPathCubeCount()})");
     }
 
-    private void SpawnPlayer()
+    public void SwitchEnvironment(int index)
+    {
+        LoadEnvironment(index);
+    }
+
+    public void NextEnvironment()
+    {
+        int next = (currentEnvironmentIndex + 1) % environments.Length;
+        LoadEnvironment(next);
+    }
+
+    public void PreviousEnvironment()
+    {
+        int prev = currentEnvironmentIndex - 1;
+        if (prev < 0) prev = environments.Length - 1;
+        LoadEnvironment(prev);
+    }
+
+    public EnvironmentProfile GetActiveEnvironment()
+    {
+        return activeEnvironment;
+    }
+
+    public int GetCurrentEnvironmentIndex()
+    {
+        return currentEnvironmentIndex;
+    }
+
+    public async void SpawnMap()
+    {
+        isLoading = true;
+        isMapReady = false;
+        
+        Debug.Log("[MapGenerator] Starting map generation...");
+        
+        for (int i = 0; i < initialCubes; i++) await SpawnNextCube();
+        
+        // Spawn player ở giữa trên cube đầu tiên
+        if (activeCubes.Count > 0) await SpawnPlayer();
+        
+        isLoading = false;
+        isMapReady = true;
+        
+        Debug.Log("[MapGenerator] Map generation complete! Ready to play.");
+    }
+
+    private async Task SpawnPlayer()
     {
         // Nếu player chưa tồn tại, tạo mới
         if (player == null && playerPrefab != null)
         {
             GameObject playerObj = Instantiate(playerPrefab);
             player = playerObj.transform;
+            
+            // Apply player decor async
+            var applicator = playerObj.GetComponent<DecorApplicator>();
+            if (applicator == null) applicator = playerObj.AddComponent<DecorApplicator>();
+            
+            var playerDecorRef = DecorManager.Instance?.GetPlayerDecorAssetRef();
+            if (playerDecorRef != null && playerDecorRef.RuntimeKeyIsValid())
+            {
+                await applicator.ApplyAsync(playerDecorRef);
+                Debug.Log($"[MapGenerator] Applied player decor: {playerDecorRef.AssetGUID}");
+            }
+            else
+            {
+                Debug.LogWarning("[MapGenerator] No player decor found! Check DecorManager settings.");
+            }
         }
 
         if (player != null && activeCubes.Count > 0)
@@ -99,11 +191,13 @@ public class MapGenerator : Singleton<MapGenerator>
         ObjectPool.Instance.RemovePool();
     }
 
-    private void Update()
+    private async void Update()
     {
+        if (player == null || activeCubes.Count == 0) return;
+        
         // Spawn thêm khi player gần cuối đường
         float dist = Vector3.Distance(player.position, activeCubes[^1].transform.position);
-        if (dist < distPlayerAndLastCube) SpawnNextCube();
+        if (dist < distPlayerAndLastCube) await SpawnNextCube();
 
         // Trả những cube phía sau player về pool khi đã cách 1-2 ô
         TrimBehindCubes(keepBehind: 4);
@@ -156,9 +250,9 @@ public class MapGenerator : Singleton<MapGenerator>
         }
     }
 
-    private void SpawnNextCube()
+    private async Task SpawnNextCube()
     {
-        var prefabObj = ObjectPool.Instance.Get();
+        var prefabObj = await ObjectPool.Instance.GetAsync();
         if (prefabObj == null)
         {
             // Nếu pool đã hết, tạm thời tăng thêm bằng cách yêu cầu pool tạo thêm (tùy chọn) hoặc bỏ qua spawn frame này
@@ -242,6 +336,65 @@ public class MapGenerator : Singleton<MapGenerator>
         currentGrid = nextGrid;
 
         prefabObj.SetActive(true);
+    }
+
+    // Get path decor AssetReference (sync - just returns reference)
+    public AssetReferenceGameObject GetPathDecorAssetRef()
+    {
+        if (activeEnvironment == null 
+            || activeEnvironment.pathCubeLibraries == null 
+            || activeEnvironment.pathCubeLibraries.Length == 0) return null;
+            
+        return PickFromEnvironment();
+    }
+
+    private AssetReferenceGameObject PickFromEnvironment()
+    {
+        var libs = activeEnvironment.pathCubeLibraries;
+        
+        switch (activeEnvironment.selectionMode)
+        {
+            case EnvironmentProfile.PathSelectionMode.Single:
+                // Chỉ dùng 1 library cố định
+                int idx = Mathf.Clamp(activeEnvironment.selectedLibraryIndex, 0, libs.Length - 1);
+                if (libs[idx] != null && libs[idx].Count > 0)
+                {
+                    int randomIdx = Random.Range(0, libs[idx].Count);
+                    return libs[idx].items[randomIdx];
+                }
+                break;
+                
+            case EnvironmentProfile.PathSelectionMode.Random:
+                // Random chọn library, rồi random cube trong library đó
+                var validLibs = new List<DecorLibrary>();
+                foreach (var lib in libs)
+                {
+                    if (lib != null && lib.Count > 0) validLibs.Add(lib);
+                }
+                if (validLibs.Count > 0)
+                {
+                    var chosenLib = validLibs[Random.Range(0, validLibs.Count)];
+                    int randomIdx = Random.Range(0, chosenLib.Count);
+                    return chosenLib.items[randomIdx];
+                }
+                break;
+                
+            case EnvironmentProfile.PathSelectionMode.Mix:
+                // Gộp tất cả thành 1 pool rồi random
+                var allAssetRefs = new List<AssetReferenceGameObject>();
+                foreach (var lib in libs)
+                {
+                    if (lib != null && lib.Count > 0)
+                    {
+                        allAssetRefs.AddRange(lib.items);
+                    }
+                }
+                if (allAssetRefs.Count > 0)
+                    return allAssetRefs[Random.Range(0, allAssetRefs.Count)];
+                break;
+        }
+        
+        return null;
     }
 
     // Đo kích thước thực tế của model để tính spacing (center-to-center)
