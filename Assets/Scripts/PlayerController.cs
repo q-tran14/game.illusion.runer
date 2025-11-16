@@ -17,6 +17,7 @@ public class PlayerController : Singleton<PlayerController>
     private bool isOnPath = false;
     private bool canMove = false; // Chỉ cho phép di chuyển khi map ready
     private Rigidbody rb;
+    private Vector3 currentFaceUp = Vector3.up; // Hướng "up" của mặt hiện tại
 
     protected override void Awake()
     {
@@ -99,10 +100,11 @@ public class PlayerController : Singleton<PlayerController>
             transform.position = targetPos;
         }
 
-        // Xoay mượt player theo hướng di chuyển
-        if (moveDirection != Vector3.zero)
+        // Xoay mượt player theo hướng di chuyển và hướng của mặt
+        if (moveDirection != Vector3.zero && currentFaceUp != Vector3.zero)
         {
-            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+            // Tính rotation dựa vào hướng di chuyển VÀ hướng up của mặt
+            Quaternion targetRotation = Quaternion.LookRotation(moveDirection, currentFaceUp);
             transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
 
@@ -124,6 +126,10 @@ public class PlayerController : Singleton<PlayerController>
         currentSegment = segment;
         currentSegmentCollider = other; // cache collider của segment hiện tại
         isOnPath = true;
+        
+        // Cập nhật hướng "up" của mặt hiện tại dựa vào rotation của cube
+        // Mặt trên của cube sau khi rotate chính là local up (0, 1, 0) được transform
+        currentFaceUp = segment.transform.rotation * Vector3.up;
     }
 
     void OnTriggerStay(Collider other)
@@ -179,6 +185,7 @@ public class PlayerController : Singleton<PlayerController>
         isOnPath = true;
         canMove = false; // Mặc định không cho di chuyển cho đến khi gọi EnableMovement()
         transform.rotation = Quaternion.identity;
+        currentFaceUp = Vector3.up; // Bắt đầu ở mặt Top
         
         Debug.Log($"Player initialized at {startPos}");
     }
