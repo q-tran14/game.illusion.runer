@@ -21,7 +21,7 @@ public class MapGenerator : Singleton<MapGenerator>
     private readonly List<PathSegment> activeCubes = new();
 
     private Vector3 currentGrid = Vector3.zero;
-    private PathSegment.TurnDir currentDir = PathSegment.TurnDir.Straight;
+    private TurnDir currentDir = TurnDir.Straight;
 
     // Spacing đo từ bounds của model (khởi tạo lazy lần đầu spawn)
     private bool spacingInitialized = false;
@@ -110,7 +110,19 @@ public class MapGenerator : Singleton<MapGenerator>
         isMapReady = false;
         
         Debug.Log("[MapGenerator] Starting map generation...");
-        
+        // ✅ Random hướng spawn ban đầu (Forward, Backward, Left, Right)
+        TurnDir[] startDirections = new TurnDir[]
+        {
+            TurnDir.Straight,  // Forward
+            TurnDir.Backward,
+            TurnDir.Left,
+            TurnDir.Right
+        };
+
+        // Random hướng đầu tiên - sẽ được dùng cho cube thứ 2
+        currentDir = startDirections[Random.Range(0, startDirections.Length)];
+
+        Debug.Log($"[MapGenerator] Starting map generation with initial direction: {currentDir}");
         for (int i = 0; i < initialCubes; i++) await SpawnNextCube();
         
         // Spawn player ở giữa trên cube đầu tiên
@@ -189,7 +201,7 @@ public class MapGenerator : Singleton<MapGenerator>
         activeCubes.Clear();
         cubeMap.Clear();
         currentGrid = Vector3.zero;
-        currentDir = PathSegment.TurnDir.Straight;
+        currentDir = TurnDir.Straight;
         spacingInitialized = false; // đo lại sau khi clear
 
         // Chỉ dọn pool nếu bạn muốn thực sự hủy các instance nhàn rỗi
@@ -269,17 +281,19 @@ public class MapGenerator : Singleton<MapGenerator>
         if (seg == null) seg = prefabObj.AddComponent<PathSegment>();
 
         // ✅ Với cube đầu tiên, luôn đặt tại (0,0,0)
-        PathSegment.TurnDir nextDir;
+        TurnDir nextDir;
         bool isFirst = activeCubes.Count == 0;
         bool stillInitialStraight = activeCubes.Count > 0 && activeCubes.Count < initialStraightCount;
 
         if (isFirst)
         {
-            nextDir = PathSegment.TurnDir.Straight; // first cube anchor
+            // ✅ Cube đầu tiên sử dụng hướng đã random trong SpawnMap()
+            nextDir = currentDir;
         }
         else if (stillInitialStraight)
         {
-            nextDir = PathSegment.TurnDir.Straight; // enforce opening straight line
+            // ✅ Các cube đầu tiên có thể đi theo bất kỳ hướng nào
+            nextDir = currentDir;
         }
         else
         {
@@ -310,7 +324,7 @@ public class MapGenerator : Singleton<MapGenerator>
             if (tail != null) tail.direction = nextDir;
         }
         // New segment starts with Straight; it will receive its real direction on the next spawn cycle.
-        seg.Init(nextGrid, PathSegment.TurnDir.Straight, PathSegment.FaceType.Top);
+        seg.Init(nextGrid, TurnDir.Straight, FaceType.Top);
         // Link list
         if (activeCubes.Count > 0)
         {
@@ -443,21 +457,21 @@ public class MapGenerator : Singleton<MapGenerator>
         // Debug.Log($"[MapGenerator] spacingX={spacingX:F2}, spacingZ={spacingZ:F2}");
     }
 
-    private PathSegment.TurnDir GetNextValidDirection()
+    private TurnDir GetNextValidDirection()
     {
         // Chỉ cho phép 3 hướng: Straight, Left, Right (không có diagonal)
-        var allDirections = new List<PathSegment.TurnDir>()
+        var allDirections = new List<TurnDir>()
         {
-            PathSegment.TurnDir.Straight,
-            PathSegment.TurnDir.Left,
-            PathSegment.TurnDir.Right,
-            PathSegment.TurnDir.Backward
+            TurnDir.Straight,
+            TurnDir.Left,
+            TurnDir.Right,
+            TurnDir.Backward
         };
 
         // Bỏ hướng ngược lại để tránh đảo chiều
-        if (currentDir != PathSegment.TurnDir.Straight)
+        if (currentDir != TurnDir.Straight)
         {
-            PathSegment.TurnDir opposite = GetOpposite(currentDir);
+            TurnDir opposite = GetOpposite(currentDir);
             allDirections.Remove(opposite);
         }
 
@@ -466,35 +480,35 @@ public class MapGenerator : Singleton<MapGenerator>
         return allDirections[randomIndex];
     }
 
-    private PathSegment.TurnDir GetOpposite(PathSegment.TurnDir dir)
+    private TurnDir GetOpposite(TurnDir dir)
     {
         switch (dir)
         {
-            case PathSegment.TurnDir.Left: return PathSegment.TurnDir.Right;
-            case PathSegment.TurnDir.Right: return PathSegment.TurnDir.Left;
-            case PathSegment.TurnDir.UpLeft: return PathSegment.TurnDir.DownRight;
-            case PathSegment.TurnDir.DownLeft: return PathSegment.TurnDir.UpRight;
-            case PathSegment.TurnDir.UpRight: return PathSegment.TurnDir.DownLeft;
-            case PathSegment.TurnDir.DownRight: return PathSegment.TurnDir.UpLeft;
-            case PathSegment.TurnDir.Backward: return PathSegment.TurnDir.Straight;
-            case PathSegment.TurnDir.Straight: return PathSegment.TurnDir.Backward;
-            default: return PathSegment.TurnDir.Straight;
+            case TurnDir.Left: return TurnDir.Right;
+            case TurnDir.Right: return TurnDir.Left;
+            case TurnDir.UpLeft: return TurnDir.DownRight;
+            case TurnDir.DownLeft: return TurnDir.UpRight;
+            case TurnDir.UpRight: return TurnDir.DownLeft;
+            case TurnDir.DownRight: return TurnDir.UpLeft;
+            case TurnDir.Backward: return TurnDir.Straight;
+            case TurnDir.Straight: return TurnDir.Backward;
+            default: return TurnDir.Straight;
         }
     }
 
-    private Vector3 GetNextGrid(Vector3 pos, PathSegment.TurnDir dir)
+    private Vector3 GetNextGrid(Vector3 pos, TurnDir dir)
     {
         // ✅ SỬA: Đồng bộ với hướng player (Z = forward, X = left/right)
         switch (dir)
         {
-            case PathSegment.TurnDir.Straight:   return pos + new Vector3(0, 0, 1);   //* Tiến thẳng (Z+)
-            case PathSegment.TurnDir.Backward:   return pos + new Vector3(0, 0, -1);  //* Lùi (Z-)
-            case PathSegment.TurnDir.Left:       return pos + new Vector3(-1, 0, 0);  //* Rẽ trái (X-)
-            case PathSegment.TurnDir.Right:      return pos + new Vector3(1, 0, 0);   //* Rẽ phải (X+)
-            case PathSegment.TurnDir.UpLeft:     return pos + new Vector3(-1, 0, 1);  // Trái + Tiến
-            case PathSegment.TurnDir.DownLeft:   return pos + new Vector3(-1, 0, -1); // Trái + Lùi
-            case PathSegment.TurnDir.UpRight:    return pos + new Vector3(1, 0, 1);   // Phải + Tiến
-            case PathSegment.TurnDir.DownRight:  return pos + new Vector3(1, 0, -1);  // Phải + Lùi
+            case TurnDir.Straight:   return pos + new Vector3(0, 0, 1);   //* Tiến thẳng (Z+)
+            case TurnDir.Backward:   return pos + new Vector3(0, 0, -1);  //* Lùi (Z-)
+            case TurnDir.Left:       return pos + new Vector3(-1, 0, 0);  //* Rẽ trái (X-)
+            case TurnDir.Right:      return pos + new Vector3(1, 0, 0);   //* Rẽ phải (X+)
+            case TurnDir.UpLeft:     return pos + new Vector3(-1, 0, 1);  // Trái + Tiến
+            case TurnDir.DownLeft:   return pos + new Vector3(-1, 0, -1); // Trái + Lùi
+            case TurnDir.UpRight:    return pos + new Vector3(1, 0, 1);   // Phải + Tiến
+            case TurnDir.DownRight:  return pos + new Vector3(1, 0, -1);  // Phải + Lùi
             default: return pos + new Vector3(0, 0, 1);
         }
     }

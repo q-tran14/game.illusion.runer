@@ -148,19 +148,19 @@ public class PlayerController : Singleton<PlayerController>
         if (!isOnPath && isAlive) GameOver();
     }
 
-    private void ApplySegmentDirection(PathSegment.TurnDir turnDir)
+    private void ApplySegmentDirection(TurnDir turnDir)
     {
         Vector3 dir = moveDirection;
         switch (turnDir)
         {
-            case PathSegment.TurnDir.Straight: dir = Vector3.forward; break;
-            case PathSegment.TurnDir.Backward: dir = Vector3.back; break;
-            case PathSegment.TurnDir.Left: dir = Vector3.left; break;
-            case PathSegment.TurnDir.Right: dir = Vector3.right; break;
-            case PathSegment.TurnDir.UpLeft: dir = (Vector3.left + Vector3.up).normalized; break;
-            case PathSegment.TurnDir.DownLeft: dir = (Vector3.left + Vector3.down).normalized; break;
-            case PathSegment.TurnDir.UpRight: dir = (Vector3.right + Vector3.up).normalized; break;
-            case PathSegment.TurnDir.DownRight: dir = (Vector3.right + Vector3.down).normalized; break;
+            case TurnDir.Straight: dir = Vector3.forward; break;
+            case TurnDir.Backward: dir = Vector3.back; break;
+            case TurnDir.Left: dir = Vector3.left; break;
+            case TurnDir.Right: dir = Vector3.right; break;
+            case TurnDir.UpLeft: dir = (Vector3.left + Vector3.up).normalized; break;
+            case TurnDir.DownLeft: dir = (Vector3.left + Vector3.down).normalized; break;
+            case TurnDir.UpRight: dir = (Vector3.right + Vector3.up).normalized; break;
+            case TurnDir.DownRight: dir = (Vector3.right + Vector3.down).normalized; break;
         }
         if (dir != moveDirection) moveDirection = dir;
     }

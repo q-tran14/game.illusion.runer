@@ -1,10 +1,9 @@
 using UnityEngine;
+public enum FaceType { Top, Back, Right }
+public enum TurnDir { Straight, Backward, Left, Right, UpLeft, DownLeft, UpRight, DownRight }
 
 public class PathSegment : MonoBehaviour
 {
-    public enum FaceType { Top, Back, Right }
-    public enum TurnDir { Straight, Backward, Left, Right, UpLeft, DownLeft, UpRight, DownRight }
-
     public Vector3 gridPos;                         // Tọa độ lưới logic (x, y, z)
     public TurnDir direction;                       // Hướng player đang đi
     public FaceType faceType = FaceType.Top;        // Hướng bề mặt: Mặt phẳng hướng lên trên
@@ -17,7 +16,7 @@ public class PathSegment : MonoBehaviour
         faceType = face;
         ChangeFace(face);
     }
-    
+
     public void ChangeFace(FaceType face)
     {
         switch (face)
@@ -39,15 +38,15 @@ public class PathSegment : MonoBehaviour
         // ✅ Đồng bộ với MapGenerator - Z = forward
         switch (direction)
         {
-            case TurnDir.Straight:   return gridPos + new Vector3(0, 0, 1);   // Thẳng
-            case TurnDir.Backward:   return gridPos + new Vector3(0, 0, -1);  // Lùi (Z-)
-            case TurnDir.Left:       return gridPos + new Vector3(-1, 0, 0);  // Trái
-            case TurnDir.Right:      return gridPos + new Vector3(1, 0, 0);   // Phải
-            case TurnDir.UpLeft:     return gridPos + new Vector3(-1, 0, 1);  // Trái-Trên
-            case TurnDir.DownLeft:   return gridPos + new Vector3(-1, 0, -1); // Trái-Dưới
-            case TurnDir.UpRight:    return gridPos + new Vector3(1, 0, 1);   // Phải-Trên
-            case TurnDir.DownRight:  return gridPos + new Vector3(1, 0, -1);  // Phải-Dưới
-            default:                 return gridPos + new Vector3(0, 0, 1);
+            case TurnDir.Straight: return gridPos + new Vector3(0, 0, 1);   // Thẳng
+            case TurnDir.Backward: return gridPos + new Vector3(0, 0, -1);  // Lùi (Z-)
+            case TurnDir.Left: return gridPos + new Vector3(-1, 0, 0);  // Trái
+            case TurnDir.Right: return gridPos + new Vector3(1, 0, 0);   // Phải
+            case TurnDir.UpLeft: return gridPos + new Vector3(-1, 0, 1);  // Trái-Trên
+            case TurnDir.DownLeft: return gridPos + new Vector3(-1, 0, -1); // Trái-Dưới
+            case TurnDir.UpRight: return gridPos + new Vector3(1, 0, 1);   // Phải-Trên
+            case TurnDir.DownRight: return gridPos + new Vector3(1, 0, -1);  // Phải-Dưới
+            default: return gridPos + new Vector3(0, 0, 1);
         }
     }
 
