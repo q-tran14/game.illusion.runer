@@ -406,10 +406,9 @@ public class MapGenerator : Singleton<MapGenerator>
                 {
                     // Kết thúc vertical chain, quay về Top
                     bool wasUpChain = (currentDir == PathSegment.TurnDir.Up);
-                    // Xác định vị trí Top tại điểm giao (không spawn tại đây)
-                    Vector3 junctionTopGrid = wasUpChain
-                        ? currentGrid                       // Up chain: Top tại cùng grid
-                        : currentGrid + new Vector3(0, -1, 0); // Down chain: Top tại grid Y-1
+                    // Junction Top is always at the current grid Y for both Up and Down chains
+                    // This ensures proper alignment when transitioning back to Top face
+                    Vector3 junctionTopGrid = currentGrid;
 
                     // Không spawn tại junction; spawn ngay ô Top đầu tiên theo hướng horizontal chọn
                     nextFace = PathSegment.FaceType.Top;
@@ -467,28 +466,38 @@ public class MapGenerator : Singleton<MapGenerator>
         // Rotate placement offset so mesh center lands on grid center after rotation
         Vector3 rotatedPlacementOffset = nextRotation * placementOffset;
 
-        // Push side-face cubes so their "top" sits flush on the side of Top cube at same grid
-        // Compute face normal in world space (local up after rotation)
-        Vector3 faceNormal = nextRotation * Vector3.up;
-
-        // Determine dominant axis of the face normal and corresponding spacing
-        float ax = Mathf.Abs(faceNormal.x);
-        float ay = Mathf.Abs(faceNormal.y);
-        float az = Mathf.Abs(faceNormal.z);
-        float axisSize = spacingY; // default for Top
-        if (ax > ay && ax > az)
+        // Only apply attachOffset when transitioning from Top to side face (first Up/Down cube)
+        Vector3 attachOffset = Vector3.zero;
+        
+        // Check if this is the first cube in a vertical chain (transition from Top to side face)
+        bool isTopToSideTransition = (nextDir == PathSegment.TurnDir.Up || nextDir == PathSegment.TurnDir.Down) && 
+                                      (activeCubes.Count > 0 && activeCubes[^1].faceType == PathSegment.FaceType.Top);
+        
+        if (isTopToSideTransition)
         {
-            axisSize = spacingX; // Right/Left faces attach along X
-        }
-        else if (az > ay)
-        {
-            axisSize = spacingZ; // Front/Back faces attach along Z
-        }
-        // If ay is largest, it's Top; axisSize stays spacingY
+            // Push side-face cubes so their "top" sits flush on the side of Top cube at same grid
+            // Compute face normal in world space (local up after rotation)
+            Vector3 faceNormal = nextRotation * Vector3.up;
 
-        // Shift amount so rotated cube's top plane touches the side plane of the Top cube
-        float attachShift = (axisSize - spacingY) * 0.5f + sideFacePad;
-        Vector3 attachOffset = faceNormal * attachShift;
+            // Determine dominant axis of the face normal and corresponding spacing
+            float ax = Mathf.Abs(faceNormal.x);
+            float ay = Mathf.Abs(faceNormal.y);
+            float az = Mathf.Abs(faceNormal.z);
+            float axisSize = spacingY; // default for Top
+            if (ax > ay && ax > az)
+            {
+                axisSize = spacingX; // Right/Left faces attach along X
+            }
+            else if (az > ay)
+            {
+                axisSize = spacingZ; // Front/Back faces attach along Z
+            }
+            // If ay is largest, it's Top; axisSize stays spacingY
+
+            // Shift amount so rotated cube's top plane touches the side plane of the Top cube
+            float attachShift = (axisSize - spacingY) * 0.5f + sideFacePad;
+            attachOffset = faceNormal * attachShift;
+        }
 
         Vector3 worldPos = basePos - rotatedPlacementOffset + attachOffset;
 
