@@ -40,6 +40,7 @@ public class PathSegment : MonoBehaviour
         switch (direction)
         {
             case TurnDir.Straight:   return gridPos + new Vector3(0, 0, 1);   // Thẳng
+            case TurnDir.Backward:   return gridPos + new Vector3(0, 0, -1);  // Lùi (Z-)
             case TurnDir.Left:       return gridPos + new Vector3(-1, 0, 0);  // Trái
             case TurnDir.Right:      return gridPos + new Vector3(1, 0, 0);   // Phải
             case TurnDir.UpLeft:     return gridPos + new Vector3(-1, 0, 1);  // Trái-Trên

@@ -154,6 +154,7 @@ public class PlayerController : Singleton<PlayerController>
         switch (turnDir)
         {
             case PathSegment.TurnDir.Straight: dir = Vector3.forward; break;
+            case PathSegment.TurnDir.Backward: dir = Vector3.back; break;
             case PathSegment.TurnDir.Left: dir = Vector3.left; break;
             case PathSegment.TurnDir.Right: dir = Vector3.right; break;
             case PathSegment.TurnDir.UpLeft: dir = (Vector3.left + Vector3.up).normalized; break;

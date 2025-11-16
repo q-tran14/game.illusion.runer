@@ -118,6 +118,11 @@ public class MapGenerator : Singleton<MapGenerator>
         
         isLoading = false;
         isMapReady = true;
+        // Khi map sẵn sàng, đảm bảo Player được phép di chuyển (không phụ thuộc vào UI)
+        if (PlayerController.Instance != null)
+        {
+            PlayerController.Instance.EnableMovement();
+        }
         
         Debug.Log("[MapGenerator] Map generation complete! Ready to play.");
     }
@@ -445,7 +450,8 @@ public class MapGenerator : Singleton<MapGenerator>
         {
             PathSegment.TurnDir.Straight,
             PathSegment.TurnDir.Left,
-            PathSegment.TurnDir.Right
+            PathSegment.TurnDir.Right,
+            PathSegment.TurnDir.Backward
         };
 
         // Bỏ hướng ngược lại để tránh đảo chiều
@@ -470,6 +476,8 @@ public class MapGenerator : Singleton<MapGenerator>
             case PathSegment.TurnDir.DownLeft: return PathSegment.TurnDir.UpRight;
             case PathSegment.TurnDir.UpRight: return PathSegment.TurnDir.DownLeft;
             case PathSegment.TurnDir.DownRight: return PathSegment.TurnDir.UpLeft;
+            case PathSegment.TurnDir.Backward: return PathSegment.TurnDir.Straight;
+            case PathSegment.TurnDir.Straight: return PathSegment.TurnDir.Backward;
             default: return PathSegment.TurnDir.Straight;
         }
     }
@@ -479,13 +487,14 @@ public class MapGenerator : Singleton<MapGenerator>
         // ✅ SỬA: Đồng bộ với hướng player (Z = forward, X = left/right)
         switch (dir)
         {
-            case PathSegment.TurnDir.Straight:   return pos + new Vector3(0, 0, 1);   //* Tiến thẳng
-            case PathSegment.TurnDir.Left:       return pos + new Vector3(-1, 0, 0);  //* Rẽ trái (đổi trục sang X)
-            case PathSegment.TurnDir.Right:      return pos + new Vector3(1, 0, 0);   //* Rẽ phải
-            case PathSegment.TurnDir.UpLeft:     return pos + new Vector3(-1, 1, 0);  // Lên + Trái (nhảy tầng cạnh chung)
-            case PathSegment.TurnDir.DownLeft:   return pos + new Vector3(-1, -1, 0); // Xuống + Trái
-            case PathSegment.TurnDir.UpRight:    return pos + new Vector3(1, 1, 0);   // Lên + Phải
-            case PathSegment.TurnDir.DownRight:  return pos + new Vector3(1, -1, 0);  // Xuống + Phải
+            case PathSegment.TurnDir.Straight:   return pos + new Vector3(0, 0, 1);   //* Tiến thẳng (Z+)
+            case PathSegment.TurnDir.Backward:   return pos + new Vector3(0, 0, -1);  //* Lùi (Z-)
+            case PathSegment.TurnDir.Left:       return pos + new Vector3(-1, 0, 0);  //* Rẽ trái (X-)
+            case PathSegment.TurnDir.Right:      return pos + new Vector3(1, 0, 0);   //* Rẽ phải (X+)
+            case PathSegment.TurnDir.UpLeft:     return pos + new Vector3(-1, 0, 1);  // Trái + Tiến
+            case PathSegment.TurnDir.DownLeft:   return pos + new Vector3(-1, 0, -1); // Trái + Lùi
+            case PathSegment.TurnDir.UpRight:    return pos + new Vector3(1, 0, 1);   // Phải + Tiến
+            case PathSegment.TurnDir.DownRight:  return pos + new Vector3(1, 0, -1);  // Phải + Lùi
             default: return pos + new Vector3(0, 0, 1);
         }
     }
