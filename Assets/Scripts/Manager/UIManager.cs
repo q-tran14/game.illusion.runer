@@ -91,10 +91,7 @@ public class UIManager : Singleton<UIManager>
         }
         
         // Enable player movement khi tắt loading UI
-        if (PlayerController.Instance != null)
-        {
-            PlayerController.Instance.EnableMovement();
-        }
+        if (PlayerController.Instance != null) PlayerController.Instance.EnableMovement();
     }
 
     void Update()

@@ -45,15 +45,9 @@ public class ObjectPool : Singleton<ObjectPool>
         GameObject obj = null;
         
         // Nếu có sẵn trong pool → dùng lại
-        if (pool.Count > 0)
-        {
-            obj = pool.Dequeue();
-        }
+        if (pool.Count > 0) obj = pool.Dequeue();
         // Nếu chưa tới giới hạn → tạo mới
-        else if (totalCreated < maxPoolSize)
-        {
-            obj = CreateNewInstance();
-        }
+        else if (totalCreated < maxPoolSize) obj = CreateNewInstance();
         else
         {
             // Đạt giới hạn → không tạo mới, trả null
@@ -74,15 +68,9 @@ public class ObjectPool : Singleton<ObjectPool>
         GameObject obj = null;
         
         // Nếu có sẵn trong pool → dùng lại
-        if (pool.Count > 0)
-        {
-            obj = pool.Dequeue();
-        }
+        if (pool.Count > 0) obj = pool.Dequeue();
         // Nếu chưa tới giới hạn → tạo mới
-        else if (totalCreated < maxPoolSize)
-        {
-            obj = CreateNewInstance();
-        }
+        else if (totalCreated < maxPoolSize) obj = CreateNewInstance();
         else
         {
             // Đạt giới hạn → không tạo mới, trả null
@@ -107,10 +95,7 @@ public class ObjectPool : Singleton<ObjectPool>
             if (mapGen != null)
             {
                 var decorAssetRef = mapGen.GetPathDecorAssetRef();
-                if (decorAssetRef != null && decorAssetRef.RuntimeKeyIsValid())
-                {
-                    await applicator.ApplyAsync(decorAssetRef);
-                }
+                if (decorAssetRef != null && decorAssetRef.RuntimeKeyIsValid()) await applicator.ApplyAsync(decorAssetRef);
             }
         }
     }
@@ -144,22 +129,13 @@ public class ObjectPool : Singleton<ObjectPool>
         
         // Tắt renderer của base prefab để tránh đè lên decor
         var renderers = newObj.GetComponentsInChildren<Renderer>();
-        foreach (var renderer in renderers)
-        {
-            renderer.enabled = false;
-        }
+        foreach (var renderer in renderers) renderer.enabled = false;
         
         // Thêm PathSegment nếu chưa có
-        if (newObj.GetComponent<PathSegment>() == null)
-        {
-            newObj.AddComponent<PathSegment>();
-        }
+        if (newObj.GetComponent<PathSegment>() == null) newObj.AddComponent<PathSegment>();
         
         // Thêm DecorApplicator nếu chưa có (để apply decor sau này)
-        if (newObj.GetComponent<DecorApplicator>() == null)
-        {
-            newObj.AddComponent<DecorApplicator>();
-        }
+        if (newObj.GetComponent<DecorApplicator>() == null) newObj.AddComponent<DecorApplicator>();
         
         // Thêm BoxCollider nếu chưa có (cho .obj file)
         var boxCollider = newObj.GetComponent<BoxCollider>();
