@@ -174,7 +174,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.37254903}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -215,7 +215,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &458003777
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -386,7 +386,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &868700744
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -764,7 +764,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1242919270
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -852,6 +852,7 @@ MonoBehaviour:
   maxCubes: 15
   distPlayerAndLastCube: 80
   initialStraightCount: 3
+  allowBackward: 1
   environments:
   - {fileID: 11400000, guid: 4890a8a4401a24888adf86680678c389, type: 2}
   - {fileID: 11400000, guid: 1612ad195e8c84d518b15e1c4eb39727, type: 2}

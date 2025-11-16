@@ -17,7 +17,9 @@ public class MapGenerator : Singleton<MapGenerator>
     [SerializeField] private int maxCubes = 20;
     [SerializeField] private float distPlayerAndLastCube = 80f; // Khoảng cách kích hoạt spawn cube mới
     [SerializeField] private int initialStraightCount = 4; // số cube đầu (sau cube gốc) giữ thẳng
-    private readonly Dictionary<Vector3, PathSegment> cubeMap = new();
+    [SerializeField] private bool allowBackward = true; // Cho phép spawn theo trục Z- (Back)
+    [SerializeField] private bool allowVertical = true; // Cho phép spawn theo trục Y (Up/Down)
+    private readonly Dictionary<(Vector3, PathSegment.FaceType), PathSegment> cubeMap = new();
     private readonly List<PathSegment> activeCubes = new();
 
     private Vector3 currentGrid = Vector3.zero;
@@ -26,8 +28,18 @@ public class MapGenerator : Singleton<MapGenerator>
     // Spacing đo từ bounds của model (khởi tạo lazy lần đầu spawn)
     private bool spacingInitialized = false;
     private float spacingX;
+    private float spacingY;
     private float spacingZ;
     private Vector3 placementOffset = Vector3.zero; // dịch pivot để tâm mesh nằm đúng grid
+    [SerializeField] private float sideFacePad = 0.02f; // đẩy nhẹ cube mặt bên để tránh đè/z-fighting
+
+    // Vertical chain tracking
+    private bool isInVerticalChain = false;
+    private int verticalChainLength = 0;
+    private const int minVerticalChain = 2;
+    private const int maxVerticalChain = 6;
+    private PathSegment.FaceType currentFace = PathSegment.FaceType.Top;
+    private PathSegment.TurnDir lastHorizontalDir = PathSegment.TurnDir.Straight; // hướng ngang trước khi Up/Down
 
     [Header("Environment Profiles")]
     [SerializeField] private EnvironmentProfile[] environments = new EnvironmentProfile[3];
@@ -119,6 +131,12 @@ public class MapGenerator : Singleton<MapGenerator>
         isLoading = false;
         isMapReady = true;
         
+        // Bảo đảm player có thể chạy ngay cả khi UI không gọi EnableMovement
+        if (PlayerController.Instance != null)
+        {
+            PlayerController.Instance.EnableMovement();
+        }
+
         Debug.Log("[MapGenerator] Map generation complete! Ready to play.");
     }
 
@@ -185,19 +203,29 @@ public class MapGenerator : Singleton<MapGenerator>
         cubeMap.Clear();
         currentGrid = Vector3.zero;
         currentDir = PathSegment.TurnDir.Straight;
+        currentFace = PathSegment.FaceType.Top;
+        isInVerticalChain = false;
+        verticalChainLength = 0;
         spacingInitialized = false; // đo lại sau khi clear
 
         // Chỉ dọn pool nếu bạn muốn thực sự hủy các instance nhàn rỗi
         ObjectPool.Instance.RemovePool();
     }
 
-    private async void Update()
+    private bool isSpawningInFlight = false;
+
+    private void Update()
     {
         if (player == null || activeCubes.Count == 0) return;
         
-        // Spawn thêm khi player gần cuối đường
-        float dist = Vector3.Distance(player.position, activeCubes[^1].transform.position);
-        if (dist < distPlayerAndLastCube) await SpawnNextCube();
+        // Spawn thêm khi player gần cuối đường (dùng sqrDistance tránh sqrt)
+        Vector3 lastPos = activeCubes[^1].transform.position;
+        float distSqr = (player.position - lastPos).sqrMagnitude;
+        float thresholdSqr = distPlayerAndLastCube * distPlayerAndLastCube;
+        if (!isSpawningInFlight && distSqr < thresholdSqr)
+        {
+            _ = SpawnNextCubeGuarded();
+        }
 
         // Trả những cube phía sau player về pool khi đã cách 1-2 ô
         TrimBehindCubes(keepBehind: 4);
@@ -207,8 +235,22 @@ public class MapGenerator : Singleton<MapGenerator>
         {
             var old = activeCubes[0];
             activeCubes.RemoveAt(0);
-            cubeMap.Remove(old.gridPos);
+            cubeMap.Remove((old.gridPos, old.faceType));
             ObjectPool.Instance.Return(old.gameObject);
+        }
+    }
+
+    private async System.Threading.Tasks.Task SpawnNextCubeGuarded()
+    {
+        if (isSpawningInFlight) return;
+        isSpawningInFlight = true;
+        try
+        {
+            await SpawnNextCube();
+        }
+        finally
+        {
+            isSpawningInFlight = false;
         }
     }
 
@@ -244,7 +286,7 @@ public class MapGenerator : Singleton<MapGenerator>
             activeCubes.RemoveAt(0);
             if (seg != null)
             {
-                cubeMap.Remove(seg.gridPos);
+                cubeMap.Remove((seg.gridPos, seg.faceType));
                 ObjectPool.Instance.Return(seg.gameObject);
             }
         }
@@ -255,7 +297,6 @@ public class MapGenerator : Singleton<MapGenerator>
         var prefabObj = await ObjectPool.Instance.GetAsync();
         if (prefabObj == null)
         {
-            // Nếu pool đã hết, tạm thời tăng thêm bằng cách yêu cầu pool tạo thêm (tùy chọn) hoặc bỏ qua spawn frame này
             Debug.LogWarning("[MapGenerator] Pool exhausted. Skipping spawn this frame.");
             return;
         }
@@ -263,49 +304,149 @@ public class MapGenerator : Singleton<MapGenerator>
         var seg = prefabObj.GetComponent<PathSegment>();
         if (seg == null) seg = prefabObj.AddComponent<PathSegment>();
 
-        // ✅ Với cube đầu tiên, luôn đặt tại (0,0,0)
         PathSegment.TurnDir nextDir;
+        Vector3 nextGrid;
+        PathSegment.FaceType nextFace;
+        Quaternion nextRotation;
+
         bool isFirst = activeCubes.Count == 0;
         bool stillInitialStraight = activeCubes.Count > 0 && activeCubes.Count < initialStraightCount;
 
         if (isFirst)
         {
-            nextDir = PathSegment.TurnDir.Straight; // first cube anchor
+            // Cube đầu tiên
+            nextDir = PathSegment.TurnDir.Straight;
+            nextGrid = Vector3.zero;
+            nextFace = PathSegment.FaceType.Top;
+            nextRotation = Quaternion.identity;
         }
         else if (stillInitialStraight)
         {
-            nextDir = PathSegment.TurnDir.Straight; // enforce opening straight line
+            nextDir = PathSegment.TurnDir.Straight;
+            nextGrid = GetNextGrid(currentGrid, nextDir);
+            nextFace = PathSegment.FaceType.Top;
+            nextRotation = Quaternion.identity;
         }
         else
         {
+            // Logic chính: xử lý vertical chains
             nextDir = GetNextValidDirection();
+            
+            if (nextDir == PathSegment.TurnDir.Up)
+            {
+                // Bắt đầu hoặc tiếp tục Up chain
+                if (!isInVerticalChain)
+                {
+                    // Bắt đầu Up chain mới
+                    isInVerticalChain = true;
+                    verticalChainLength = 1;
+                    lastHorizontalDir = currentDir;
+                    
+                    // Xác định face dựa vào hướng horizontal trước đó
+                    if (currentDir == PathSegment.TurnDir.Straight || currentDir == PathSegment.TurnDir.Backward)
+                    {
+                        nextFace = PathSegment.FaceType.Back;
+                        nextRotation = Quaternion.Euler(-90f, 0f, 0f);
+                    }
+                    else // Left hoặc Right
+                    {
+                        nextFace = PathSegment.FaceType.Right;
+                        nextRotation = Quaternion.Euler(-90f, -90f, 0f);
+                    }
+                    
+                    // Up: gridPos MỚI (Y+1)
+                    nextGrid = currentGrid + new Vector3(0, 1, 0);
+                }
+                else
+                {
+                    // Tiếp tục Up chain
+                    verticalChainLength++;
+                    nextFace = currentFace;
+                    nextRotation = activeCubes[^1].transform.rotation;
+                    nextGrid = currentGrid + new Vector3(0, 1, 0);
+                }
+            }
+            else if (nextDir == PathSegment.TurnDir.Down)
+            {
+                if (!isInVerticalChain)
+                {
+                    // Bắt đầu Down chain mới
+                    isInVerticalChain = true;
+                    verticalChainLength = 1;
+                    lastHorizontalDir = currentDir;
+                    
+                    // Xác định face dựa vào hướng horizontal (ngược với Up)
+                    if (currentDir == PathSegment.TurnDir.Straight || currentDir == PathSegment.TurnDir.Backward)
+                    {
+                        nextFace = PathSegment.FaceType.Right;
+                        nextRotation = Quaternion.Euler(-90f, -90f, 0f);
+                    }
+                    else // Left hoặc Right
+                    {
+                        nextFace = PathSegment.FaceType.Back;
+                        nextRotation = Quaternion.Euler(-90f, 0f, 0f);
+                    }
+                    
+                    // Down: KHÔNG spawn tại điểm giao; đặt cube đầu tiên tại Y-1
+                    nextGrid = currentGrid + new Vector3(0, -1, 0);
+                }
+                else
+                {
+                    // Tiếp tục Down chain
+                    verticalChainLength++;
+                    nextFace = currentFace;
+                    nextRotation = activeCubes[^1].transform.rotation;
+                    nextGrid = currentGrid + new Vector3(0, -1, 0);
+                }
+            }
+            else
+            {
+                // Horizontal direction
+                if (isInVerticalChain)
+                {
+                    // Kết thúc vertical chain, quay về Top
+                    bool wasUpChain = (currentDir == PathSegment.TurnDir.Up);
+                    // Xác định vị trí Top tại điểm giao (không spawn tại đây)
+                    Vector3 junctionTopGrid = wasUpChain
+                        ? currentGrid                       // Up chain: Top tại cùng grid
+                        : currentGrid + new Vector3(0, -1, 0); // Down chain: Top tại grid Y-1
+
+                    // Không spawn tại junction; spawn ngay ô Top đầu tiên theo hướng horizontal chọn
+                    nextFace = PathSegment.FaceType.Top;
+                    nextRotation = Quaternion.identity;
+                    nextGrid = GetNextGrid(junctionTopGrid, nextDir);
+
+                    // Reset vertical chain
+                    isInVerticalChain = false;
+                    verticalChainLength = 0;
+                }
+                else
+                {
+                    // Di chuyển horizontal bình thường trên Top
+                    nextGrid = GetNextGrid(currentGrid, nextDir);
+                    nextFace = PathSegment.FaceType.Top;
+                    nextRotation = Quaternion.identity;
+                }
+            }
         }
 
-        Vector3 nextGrid = isFirst ? Vector3.zero : GetNextGrid(currentGrid, nextDir);
-
-        // Nếu trùng cube → bỏ qua
-        if (cubeMap.ContainsKey(nextGrid))
+        // Kiểm tra trùng
+        if (HasCubeAt(nextGrid, nextFace))
         {
             ObjectPool.Instance.Return(prefabObj);
             return;
         }
 
-        // ✅ Kiểm tra: Nếu bất kỳ neighbor nào của vị trí mới đã có 2 neighbors → không spawn
-        if (!isFirst && WouldExceedNeighborLimit(nextGrid))
-        {
-            ObjectPool.Instance.Return(prefabObj);
-            return;
-        }
-
-        // IMPORTANT: direction belongs to the PREVIOUS segment (outgoing).
-        // Assign chosen direction to tail, and keep new segment temporarily Straight until next spawn.
+        // Assign direction to previous segment
         if (activeCubes.Count > 0)
         {
             var tail = activeCubes[^1];
             if (tail != null) tail.direction = nextDir;
         }
-        // New segment starts with Straight; it will receive its real direction on the next spawn cycle.
-        seg.Init(nextGrid, PathSegment.TurnDir.Straight, PathSegment.FaceType.Top);
+
+        // Init new segment
+        seg.Init(nextGrid, PathSegment.TurnDir.Straight, nextFace);
+        
         // Link list
         if (activeCubes.Count > 0)
         {
@@ -313,27 +454,53 @@ public class MapGenerator : Singleton<MapGenerator>
             if (prev != null) prev.next = seg;
         }
 
-        // Khởi tạo spacing nếu chưa có (đo từ Renderer/Collider bounds)
+        // Initialize spacing
         if (!spacingInitialized) InitializeSpacing(prefabObj);
 
-        // Tính center mong muốn của cube theo grid (luôn nằm trên mặt phẳng Y=0)
-        Vector3 desiredCenter = new Vector3(
-            seg.gridPos.x * spacingX,
-            0f,
-            seg.gridPos.z * spacingZ
+        // Calculate world position (3D) with rotation-aware offset and face alignment
+        Vector3 basePos = new Vector3(
+            nextGrid.x * spacingX,
+            nextGrid.y * spacingY,
+            nextGrid.z * spacingZ
         );
 
-        // Đưa mesh (pivot lệch) vào đúng center bằng cách worldPos = desiredCenter - placementOffset
-        Vector3 worldPos = desiredCenter - placementOffset;
-        prefabObj.transform.position = worldPos;
-        
-        prefabObj.transform.rotation = Quaternion.identity;
+        // Rotate placement offset so mesh center lands on grid center after rotation
+        Vector3 rotatedPlacementOffset = nextRotation * placementOffset;
 
-        cubeMap[nextGrid] = seg;
+        // Push side-face cubes so their "top" sits flush on the side of Top cube at same grid
+        // Compute face normal in world space (local up after rotation)
+        Vector3 faceNormal = nextRotation * Vector3.up;
+
+        // Determine dominant axis of the face normal and corresponding spacing
+        float ax = Mathf.Abs(faceNormal.x);
+        float ay = Mathf.Abs(faceNormal.y);
+        float az = Mathf.Abs(faceNormal.z);
+        float axisSize = spacingY; // default for Top
+        if (ax > ay && ax > az)
+        {
+            axisSize = spacingX; // Right/Left faces attach along X
+        }
+        else if (az > ay)
+        {
+            axisSize = spacingZ; // Front/Back faces attach along Z
+        }
+        // If ay is largest, it's Top; axisSize stays spacingY
+
+        // Shift amount so rotated cube's top plane touches the side plane of the Top cube
+        float attachShift = (axisSize - spacingY) * 0.5f + sideFacePad;
+        Vector3 attachOffset = faceNormal * attachShift;
+
+        Vector3 worldPos = basePos - rotatedPlacementOffset + attachOffset;
+
+        prefabObj.transform.position = worldPos;
+        prefabObj.transform.rotation = nextRotation;
+
+        cubeMap[(nextGrid, nextFace)] = seg;
         activeCubes.Add(seg);
 
-        currentDir = nextDir; // current chosen outgoing dir (applied to previous segment)
+        currentDir = nextDir;
         currentGrid = nextGrid;
+        currentFace = nextFace;
 
         prefabObj.SetActive(true);
     }
@@ -427,6 +594,7 @@ public class MapGenerator : Singleton<MapGenerator>
 
     float fallback = cubeSize + gap;
     spacingX = hasBounds ? bounds.size.x + gap : fallback;
+    spacingY = hasBounds ? bounds.size.y + gap : fallback;
     spacingZ = hasBounds ? bounds.size.z + gap : fallback;
 
     // Tính offset để đưa tâm mesh đúng tại tọa độ grid (pivot có thể không ở giữa)
@@ -440,73 +608,175 @@ public class MapGenerator : Singleton<MapGenerator>
 
     private PathSegment.TurnDir GetNextValidDirection()
     {
-        // Chỉ cho phép 3 hướng: Straight, Left, Right (không có diagonal)
-        var allDirections = new List<PathSegment.TurnDir>()
+        // Nếu đang trong vertical chain, chỉ cho phép Up/Down
+        if (isInVerticalChain)
+        {
+            // Kiểm tra còn trong giới hạn chain không
+            if (verticalChainLength < maxVerticalChain)
+            {
+                // Tiếp tục cùng hướng (Up hoặc Down)
+                return currentDir;
+            }
+            else
+            {
+                // Đã đạt max, buộc phải kết thúc chain (quay về Top)
+                // Direction sẽ được set khi spawn cube kết thúc
+                return PathSegment.TurnDir.Straight; // placeholder
+            }
+        }
+
+        // Đang ở Top face - có thể đi horizontal hoặc bắt đầu vertical
+        var baseCandidates = new List<PathSegment.TurnDir>
         {
             PathSegment.TurnDir.Straight,
             PathSegment.TurnDir.Left,
             PathSegment.TurnDir.Right
         };
-
-        // Bỏ hướng ngược lại để tránh đảo chiều
-        if (currentDir != PathSegment.TurnDir.Straight)
+        if (allowBackward) baseCandidates.Add(PathSegment.TurnDir.Backward);
+        if (allowVertical && activeCubes.Count >= initialStraightCount)
         {
-            PathSegment.TurnDir opposite = GetOpposite(currentDir);
-            allDirections.Remove(opposite);
+            baseCandidates.Add(PathSegment.TurnDir.Up);
+            baseCandidates.Add(PathSegment.TurnDir.Down);
         }
 
-        // Chọn random trong danh sách hợp lệ (tỉ lệ đều nhau)
-        int randomIndex = Random.Range(0, allDirections.Count);
-        return allDirections[randomIndex];
+        var working = new List<PathSegment.TurnDir>(baseCandidates);
+        var opposite = GetOpposite(currentDir);
+        bool removedOpposite = working.Remove(opposite);
+
+        List<PathSegment.TurnDir> FilterFeasible(List<PathSegment.TurnDir> list)
+        {
+            var res = new List<PathSegment.TurnDir>();
+            for (int i = 0; i < list.Count; i++)
+            {
+                var dir = list[i];
+                
+                // Vertical directions được xử lý riêng
+                if (dir == PathSegment.TurnDir.Up || dir == PathSegment.TurnDir.Down)
+                {
+                    // Luôn cho phép bắt đầu vertical nếu chưa trong chain
+                    res.Add(dir);
+                    continue;
+                }
+                
+                // Horizontal directions
+                Vector3 ng = GetNextGrid(currentGrid, dir);
+                if (HasCubeAt(ng, currentFace)) continue;
+                if (!HasSimplePathAdjacency(ng, currentGrid, currentFace)) continue;
+                if (WouldExceedNeighborLimit(ng)) continue;
+                res.Add(dir);
+            }
+            return res;
+        }
+
+        var feasible = FilterFeasible(working);
+
+        if (feasible.Count == 0 && removedOpposite)
+        {
+            var withOpp = new List<PathSegment.TurnDir>(working) { opposite };
+            feasible = FilterFeasible(withOpp);
+        }
+
+        if (feasible.Count == 0)
+        {
+            if (working.Contains(PathSegment.TurnDir.Straight)) return PathSegment.TurnDir.Straight;
+            return baseCandidates[Random.Range(0, baseCandidates.Count)];
+        }
+
+        return feasible[Random.Range(0, feasible.Count)];
+    }
+
+    // Helper: kiểm tra xem có cube nào tại (grid, face) không
+    private bool HasCubeAt(Vector3 grid, PathSegment.FaceType face)
+    {
+        return cubeMap.ContainsKey((grid, face));
+    }
+
+    // Helper: kiểm tra xem có cube nào tại grid (bất kỳ face nào) không
+    private bool HasCubeAtAnyFace(Vector3 grid)
+    {
+        return HasCubeAt(grid, PathSegment.FaceType.Top) ||
+               HasCubeAt(grid, PathSegment.FaceType.Back) ||
+               HasCubeAt(grid, PathSegment.FaceType.Right);
+    }
+
+    // Đảm bảo ô mới chỉ kề đúng 1 ô là currentGrid (tránh khép vòng/nhánh)
+    // Chỉ áp dụng cho horizontal movement trên cùng face
+    private bool HasSimplePathAdjacency(Vector3 pos, Vector3 expectedNeighbor, PathSegment.FaceType face)
+    {
+        // Chỉ xét 4 hướng phẳng (±X, ±Z) trên cùng face
+        Vector3[] dirs = new Vector3[]
+        {
+            new Vector3(1,0,0),
+            new Vector3(-1,0,0),
+            new Vector3(0,0,1),
+            new Vector3(0,0,-1),
+        };
+
+        int count = 0;
+        bool hasExpected = false;
+        for (int i = 0; i < dirs.Length; i++)
+        {
+            Vector3 n = pos + dirs[i];
+            if (HasCubeAt(n, face))
+            {
+                count++;
+                if (n == expectedNeighbor) hasExpected = true;
+            }
+        }
+
+        if (activeCubes.Count == 0)
+        {
+            return count == 0;
+        }
+
+        return count == 1 && hasExpected;
     }
 
     private PathSegment.TurnDir GetOpposite(PathSegment.TurnDir dir)
     {
         switch (dir)
         {
+            case PathSegment.TurnDir.Straight: return PathSegment.TurnDir.Backward;
+            case PathSegment.TurnDir.Backward: return PathSegment.TurnDir.Straight;
             case PathSegment.TurnDir.Left: return PathSegment.TurnDir.Right;
             case PathSegment.TurnDir.Right: return PathSegment.TurnDir.Left;
-            case PathSegment.TurnDir.UpLeft: return PathSegment.TurnDir.DownRight;
-            case PathSegment.TurnDir.DownLeft: return PathSegment.TurnDir.UpRight;
-            case PathSegment.TurnDir.UpRight: return PathSegment.TurnDir.DownLeft;
-            case PathSegment.TurnDir.DownRight: return PathSegment.TurnDir.UpLeft;
+            case PathSegment.TurnDir.Up: return PathSegment.TurnDir.Down;
+            case PathSegment.TurnDir.Down: return PathSegment.TurnDir.Up;
             default: return PathSegment.TurnDir.Straight;
         }
     }
 
     private Vector3 GetNextGrid(Vector3 pos, PathSegment.TurnDir dir)
     {
-        // ✅ SỬA: Đồng bộ với hướng player (Z = forward, X = left/right)
         switch (dir)
         {
-            case PathSegment.TurnDir.Straight:   return pos + new Vector3(0, 0, 1);   //* Tiến thẳng
-            case PathSegment.TurnDir.Left:       return pos + new Vector3(-1, 0, 0);  //* Rẽ trái (đổi trục sang X)
-            case PathSegment.TurnDir.Right:      return pos + new Vector3(1, 0, 0);   //* Rẽ phải
-            case PathSegment.TurnDir.UpLeft:     return pos + new Vector3(-1, 1, 0);  // Lên + Trái (nhảy tầng cạnh chung)
-            case PathSegment.TurnDir.DownLeft:   return pos + new Vector3(-1, -1, 0); // Xuống + Trái
-            case PathSegment.TurnDir.UpRight:    return pos + new Vector3(1, 1, 0);   // Lên + Phải
-            case PathSegment.TurnDir.DownRight:  return pos + new Vector3(1, -1, 0);  // Xuống + Phải
+            case PathSegment.TurnDir.Straight:   return pos + new Vector3(0, 0, 1);   // Z+
+            case PathSegment.TurnDir.Backward:   return pos + new Vector3(0, 0, -1);  // Z-
+            case PathSegment.TurnDir.Left:       return pos + new Vector3(-1, 0, 0);  // X-
+            case PathSegment.TurnDir.Right:      return pos + new Vector3(1, 0, 0);   // X+
+            case PathSegment.TurnDir.Up:         return pos + new Vector3(0, 1, 0);   // Y+
+            case PathSegment.TurnDir.Down:       return pos + new Vector3(0, -1, 0);  // Y-
             default: return pos + new Vector3(0, 0, 1);
         }
     }
 
-    // Đếm số cube neighbor kề cạnh (6 hướng chính: ±X, ±Y, ±Z)
+    // Đếm số cube neighbor kề cạnh (6 hướng chính: ±X, ±Y, ±Z) - xét tất cả faces
     private int CountNeighbors(Vector3 pos)
     {
         int count = 0;
         Vector3[] directions = new Vector3[]
         {
-            new Vector3(1, 0, 0),   // Right
-            new Vector3(-1, 0, 0),  // Left
-            new Vector3(0, 1, 0),   // Up
-            new Vector3(0, -1, 0),  // Down
-            new Vector3(0, 0, 1),   // Forward
-            new Vector3(0, 0, -1)   // Back
+            new Vector3(1, 0, 0),
+            new Vector3(-1, 0, 0),
+            new Vector3(0, 1, 0),
+            new Vector3(0, -1, 0),
+            new Vector3(0, 0, 1),
+            new Vector3(0, 0, -1)
         };
 
         foreach (var dir in directions)
         {
-            if (cubeMap.ContainsKey(pos + dir))
+            if (HasCubeAtAnyFace(pos + dir))
             {
                 count++;
             }
@@ -520,26 +790,22 @@ public class MapGenerator : Singleton<MapGenerator>
     {
         Vector3[] directions = new Vector3[]
         {
-            new Vector3(1, 0, 0),   // Right
-            new Vector3(-1, 0, 0),  // Left
-            new Vector3(0, 1, 0),   // Up
-            new Vector3(0, -1, 0),  // Down
-            new Vector3(0, 0, 1),   // Forward
-            new Vector3(0, 0, -1)   // Back
+            new Vector3(1, 0, 0),
+            new Vector3(-1, 0, 0),
+            new Vector3(0, 1, 0),
+            new Vector3(0, -1, 0),
+            new Vector3(0, 0, 1),
+            new Vector3(0, 0, -1)
         };
 
-        // Kiểm tra từng neighbor hiện tại của vị trí mới
         foreach (var dir in directions)
         {
             Vector3 neighborPos = pos + dir;
             
-            // Nếu có cube tại neighbor này
-            if (cubeMap.ContainsKey(neighborPos))
+            if (HasCubeAtAnyFace(neighborPos))
             {
-                // Đếm xem cube neighbor này hiện có bao nhiêu neighbors
                 int neighborCount = CountNeighbors(neighborPos);
                 
-                // Nếu nó đã có 2 neighbors, thì việc thêm cube mới sẽ làm nó có 3
                 if (neighborCount >= 2)
                 {
                     return true;

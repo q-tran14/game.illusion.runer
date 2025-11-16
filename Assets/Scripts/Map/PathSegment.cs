@@ -3,7 +3,7 @@ using UnityEngine;
 public class PathSegment : MonoBehaviour
 {
     public enum FaceType { Top, Back, Right }
-    public enum TurnDir { Straight, Backward, Left, Right, UpLeft, DownLeft, UpRight, DownRight }
+    public enum TurnDir { Straight, Backward, Left, Right, Up, Down }
 
     public Vector3 gridPos;                         // Tọa độ lưới logic (x, y, z)
     public TurnDir direction;                       // Hướng player đang đi
@@ -36,28 +36,25 @@ public class PathSegment : MonoBehaviour
 
     public Vector3 GetNextGridPos()
     {
-        // ✅ Đồng bộ với MapGenerator - Z = forward
         switch (direction)
         {
-            case TurnDir.Straight:   return gridPos + new Vector3(0, 0, 1);   // Thẳng
-            case TurnDir.Left:       return gridPos + new Vector3(-1, 0, 0);  // Trái
-            case TurnDir.Right:      return gridPos + new Vector3(1, 0, 0);   // Phải
-            case TurnDir.UpLeft:     return gridPos + new Vector3(-1, 0, 1);  // Trái-Trên
-            case TurnDir.DownLeft:   return gridPos + new Vector3(-1, 0, -1); // Trái-Dưới
-            case TurnDir.UpRight:    return gridPos + new Vector3(1, 0, 1);   // Phải-Trên
-            case TurnDir.DownRight:  return gridPos + new Vector3(1, 0, -1);  // Phải-Dưới
+            case TurnDir.Straight:   return gridPos + new Vector3(0, 0, 1);   // Z+
+            case TurnDir.Backward:   return gridPos + new Vector3(0, 0, -1);  // Z-
+            case TurnDir.Left:       return gridPos + new Vector3(-1, 0, 0);  // X-
+            case TurnDir.Right:      return gridPos + new Vector3(1, 0, 0);   // X+
+            case TurnDir.Up:         return gridPos + new Vector3(0, 1, 0);   // Y+
+            case TurnDir.Down:       return gridPos + new Vector3(0, -1, 0);  // Y-
             default:                 return gridPos + new Vector3(0, 0, 1);
         }
     }
 
-    public Vector3 GetWorldPos(float unit)
+    public Vector3 GetWorldPos(float unitX, float unitY, float unitZ)
     {
-        // ✅ Chuyển grid position thành world position
-        // gridPos.x = left/right, gridPos.z = forward/back, gridPos.y = up/down (không dùng)
+        // Chuyển grid position thành world position (3D)
         return new Vector3(
-            gridPos.x * unit,      // X world = X grid * khoảng cách
-            0,                      // Y world = 0 (tất cả cube ở cùng độ cao)
-            gridPos.z * unit        // Z world = Z grid * khoảng cách
+            gridPos.x * unitX,
+            gridPos.y * unitY,
+            gridPos.z * unitZ
         );
     }
 }

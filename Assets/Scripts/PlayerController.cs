@@ -11,6 +11,7 @@ public class PlayerController : Singleton<PlayerController>
     [Header("State")]
     private Vector3 moveDirection = Vector3.forward;
     private PathSegment currentSegment;
+    private Collider currentSegmentCollider; // cache để tránh GetComponent mỗi frame
     // Không dùng cơ chế 'nextSegment' nữa; hướng được lấy từ segment hiện tại
     private bool isAlive = true;
     private bool isOnPath = false;
@@ -56,14 +57,17 @@ public class PlayerController : Singleton<PlayerController>
             Vector3 cubeCenter = currentSegment.transform.position;
             
             // Tính mặt trên của cube
-            Collider cubeCollider = currentSegment.GetComponent<Collider>();
-            float cubeTopY = cubeCollider != null ? cubeCollider.bounds.max.y : cubeCenter.y;
+            float cubeTopY = currentSegmentCollider != null ? currentSegmentCollider.bounds.max.y : cubeCenter.y;
             
             Vector3 currentPos = transform.position;
             Vector3 targetPos = currentPos;
             
-            // Luôn kéo player về Y của mặt trên cube
-            targetPos.y = Mathf.Lerp(currentPos.y, cubeTopY, centeringSpeed * Time.deltaTime);
+            // Khi đang đi Up/Down, KHÔNG ép Y về mặt trên của cube hiện tại để cho phép rời mặt Top xuống mặt bên
+            bool movingVertically = currentSegment.direction == PathSegment.TurnDir.Up || currentSegment.direction == PathSegment.TurnDir.Down;
+            if (!movingVertically)
+            {
+                targetPos.y = Mathf.Lerp(currentPos.y, cubeTopY, centeringSpeed * Time.deltaTime);
+            }
             
             // Xác định trục cần điều chỉnh dựa vào hướng di chuyển
             if (Mathf.Abs(moveDirection.x) > 0.5f) // Đi ngang (Left/Right)
@@ -81,6 +85,7 @@ public class PlayerController : Singleton<PlayerController>
                 // Kéo về center theo cả X và Z
                 targetPos.x = Mathf.Lerp(currentPos.x, cubeCenter.x, centeringSpeed * Time.deltaTime);
                 targetPos.z = Mathf.Lerp(currentPos.z, cubeCenter.z, centeringSpeed * Time.deltaTime);
+                // Không chỉnh Y tại đây; để Y tự di chuyển theo moveDirection
             }
             else // Diagonal
             {
@@ -117,6 +122,7 @@ public class PlayerController : Singleton<PlayerController>
         if (segment == null) return;
 
         currentSegment = segment;
+        currentSegmentCollider = other; // cache collider của segment hiện tại
         isOnPath = true;
     }
 
@@ -134,6 +140,7 @@ public class PlayerController : Singleton<PlayerController>
             if (segment == currentSegment)
             {
                 isOnPath = false;
+                if (currentSegmentCollider == other) currentSegmentCollider = null;
                 
                 // Nếu không có next segment → đã rời khỏi path → check game over
                 // Delay 0.1s để tránh false positive khi chuyển cube
@@ -154,12 +161,11 @@ public class PlayerController : Singleton<PlayerController>
         switch (turnDir)
         {
             case PathSegment.TurnDir.Straight: dir = Vector3.forward; break;
+            case PathSegment.TurnDir.Backward: dir = Vector3.back; break;
             case PathSegment.TurnDir.Left: dir = Vector3.left; break;
             case PathSegment.TurnDir.Right: dir = Vector3.right; break;
-            case PathSegment.TurnDir.UpLeft: dir = (Vector3.left + Vector3.up).normalized; break;
-            case PathSegment.TurnDir.DownLeft: dir = (Vector3.left + Vector3.down).normalized; break;
-            case PathSegment.TurnDir.UpRight: dir = (Vector3.right + Vector3.up).normalized; break;
-            case PathSegment.TurnDir.DownRight: dir = (Vector3.right + Vector3.down).normalized; break;
+            case PathSegment.TurnDir.Up: dir = Vector3.up; break;
+            case PathSegment.TurnDir.Down: dir = Vector3.down; break;
         }
         if (dir != moveDirection) moveDirection = dir;
     }
