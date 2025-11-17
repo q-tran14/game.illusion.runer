@@ -21,7 +21,7 @@ MonoBehaviour:
     m_SubObjectName: 
     m_SubObjectType: 
     m_EditorAssetChanged: 0
-  - m_AssetGUID: cf4e20a80a8e84f03b7e2ed1251eb5a3
+  - m_AssetGUID: e1e5180a351ba4db39b9df879e26c39d
     m_SubObjectName: 
     m_SubObjectType: 
     m_EditorAssetChanged: 0
@@ -40,4 +40,4 @@ MonoBehaviour:
   - m_AssetGUID: b78b548869862423eab5507da6d24cb5
     m_SubObjectName: 
     m_SubObjectType: 
-    m_EditorAssetChanged: 1
+    m_EditorAssetChanged: 0

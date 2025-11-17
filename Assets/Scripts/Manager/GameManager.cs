@@ -33,7 +33,7 @@ public class GameManager : Singleton<GameManager>
     void Start()
     {
         // Auto start game
-        StartGame();
+        // StartGame();
     }
 
     void Update()
@@ -56,11 +56,10 @@ public class GameManager : Singleton<GameManager>
         score = 0;
         Time.timeScale = 1f;
 
-        // Spawn map
-        if (MapGenerator.Instance != null)
+        // Hide play button when game starts
+        if (UIManager.Instance != null)
         {
-            MapGenerator.Instance.ClearMap();
-            MapGenerator.Instance.SpawnMap();
+            UIManager.Instance.HidePlayButton();
         }
 
         Debug.Log("Game Started!");
@@ -80,19 +79,51 @@ public class GameManager : Singleton<GameManager>
             SaveHighScore();
         }
 
-        // Notify UI
+        // Notify UI - show game over with restart button
         if (UIManager.Instance != null)
         {
             UIManager.Instance.ShowGameOver(score);
+            UIManager.Instance.ShowRestartButton();
         }
 
         Debug.Log($"🔴 Game Over! Score: {score} | High Score: {highScore}");
     }
 
-    public void RestartGame()
+    public async void RestartGame()
     {
         Time.timeScale = 1f;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        currentState = GameState.Menu;
+        score = 0;
+        
+        // Show loading UI
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.HideGameOver();
+            UIManager.Instance.ShowLoading();
+        }
+        
+        // Clear and regenerate map
+        if (MapGenerator.Instance != null)
+        {
+            MapGenerator.Instance.ClearMap();
+            MapGenerator.Instance.SpawnMap();
+            
+            // Wait for map to be ready
+            while (!MapGenerator.Instance.IsMapReady)
+            {
+                await System.Threading.Tasks.Task.Yield();
+            }
+        }
+        
+        // Hide loading and show play button
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.HideLoading();
+            UIManager.Instance.HideRestartButton();
+            UIManager.Instance.ShowPlayButton();
+        }
+        
+        Debug.Log("[GameManager] Game restarted - waiting for Play button");
     }
 
     public void PauseGame()

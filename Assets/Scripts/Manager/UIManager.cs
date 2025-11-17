@@ -13,6 +13,7 @@ public class UIManager : Singleton<UIManager>
     [SerializeField] private TextMeshProUGUI highScoreText;
     [SerializeField] private GameObject gameOverPanel;
     [SerializeField] private Button restartButton;
+    [SerializeField] private Button playButton;
     [SerializeField] private TextMeshProUGUI finalScoreText;
 
     [Header("Loading UI")]
@@ -26,6 +27,7 @@ public class UIManager : Singleton<UIManager>
         // Setup button
         if (restartButton != null)
         {
+            HideRestartButton(); // ✅ Hide restart at start
             restartButton.onClick.AddListener(OnRestartClicked);
         }
     }
@@ -38,6 +40,12 @@ public class UIManager : Singleton<UIManager>
         
         // Check if map is loading and show loading UI
         CheckMapLoadingState();
+        
+        // Setup play button
+        if (playButton != null)
+        {
+            playButton.onClick.AddListener(OnPlayButtonClicked);
+        }
     }
 
     async void CheckMapLoadingState()
@@ -89,9 +97,6 @@ public class UIManager : Singleton<UIManager>
             loadingUI.SetActive(false);
             Debug.Log("[UIManager] Loading UI hidden.");
         }
-        
-        // Enable player movement khi tắt loading UI
-        if (PlayerController.Instance != null) PlayerController.Instance.EnableMovement();
     }
 
     void Update()
@@ -147,6 +152,71 @@ public class UIManager : Singleton<UIManager>
         if (GameManager.Instance != null)
         {
             GameManager.Instance.RestartGame();
+        }
+    }
+
+    public void OnPlayButtonClicked()
+    {
+        // Start game
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.StartGame();
+        }
+        
+        // Enable player movement
+        if (PlayerController.Instance != null)
+        {
+            PlayerController.Instance.EnableMovement();
+        }
+        
+        Debug.Log("[UIManager] Play button clicked - Game started!");
+    }
+    
+    /// <summary>
+    /// Show play button
+    /// </summary>
+    public void ShowPlayButton()
+    {
+        if (playButton != null)
+        {
+            playButton.gameObject.SetActive(true);
+            Debug.Log("[UIManager] Play button shown.");
+        }
+    }
+    
+    /// <summary>
+    /// Hide play button
+    /// </summary>
+    public void HidePlayButton()
+    {
+        if (playButton != null)
+        {
+            playButton.gameObject.SetActive(false);
+            Debug.Log("[UIManager] Play button hidden.");
+        }
+    }
+    
+    /// <summary>
+    /// Show restart button (only on game over)
+    /// </summary>
+    public void ShowRestartButton()
+    {
+        if (restartButton != null)
+        {
+            restartButton.gameObject.SetActive(true);
+            Debug.Log("[UIManager] Restart button shown.");
+        }
+    }
+    
+    /// <summary>
+    /// Hide restart button
+    /// </summary>
+    public void HideRestartButton()
+    {
+        if (restartButton != null)
+        {
+            restartButton.gameObject.SetActive(false);
+            Debug.Log("[UIManager] Restart button hidden.");
         }
     }
 }

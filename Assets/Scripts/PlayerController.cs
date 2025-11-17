@@ -16,7 +16,6 @@ public class PlayerController : Singleton<PlayerController>
     private bool isOnPath = false;
     private bool canMove = false; // Chỉ cho phép di chuyển khi map ready
     private Rigidbody rb;
-
     protected override void Awake()
     {
         base.Awake();
@@ -101,10 +100,34 @@ public class PlayerController : Singleton<PlayerController>
             transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
 
-        // Hướng di chuyển luôn theo direction của currentSegment
-        if (autoTurn && currentSegment != null)
+        // ✅ Kiểm tra game over liên tục
+        // CheckGameOver();
+
+        // ✅ Manual turn: Player clicks/taps to turn
+        if (!autoTurn)
         {
-            ApplySegmentDirection(currentSegment.direction);
+            // Detect input: Mouse click (Editor) or Touch (Mobile)
+            bool inputDetected = Input.GetMouseButtonDown(0); // Left click
+            
+            #if UNITY_ANDROID || UNITY_IOS
+            if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
+            {
+                inputDetected = true;
+            }
+            #endif
+            
+            if (inputDetected)
+            {
+                TryTurn();
+            }
+        }
+        else
+        {
+            // Auto turn mode (original behavior)
+            if (currentSegment != null)
+            {
+                ApplySegmentDirection(currentSegment.direction);
+            }
         }
     }
 
@@ -135,49 +158,99 @@ public class PlayerController : Singleton<PlayerController>
             {
                 isOnPath = false;
                 
-                // Nếu không có next segment → đã rời khỏi path → check game over
-                // Delay 0.1s để tránh false positive khi chuyển cube
-                Invoke(nameof(CheckGameOver), 0.1f);
+                // Check game over khi rời khỏi cube
+                if (canMove && isAlive)
+                {
+                    Invoke(nameof(CheckGameOver), 0.1f);
+                }
             }
         }
     }
 
     private void CheckGameOver()
     {
+        // if (currentSegment.GetDirectionVector(currentSegment.direction) != moveDirection) GameOver();
         // Nếu player không còn trên path và chưa vào cube mới → Game Over
-        if (!isOnPath && isAlive) GameOver();
+        if (!isOnPath && isAlive && canMove)
+        {
+            GameOver();
+        }
     }
 
     private void ApplySegmentDirection(TurnDir turnDir)
     {
-        Vector3 dir = moveDirection;
-        switch (turnDir)
-        {
-            case TurnDir.Straight: dir = Vector3.forward; break;
-            case TurnDir.Backward: dir = Vector3.back; break;
-            case TurnDir.Left: dir = Vector3.left; break;
-            case TurnDir.Right: dir = Vector3.right; break;
-            case TurnDir.UpLeft: dir = (Vector3.left + Vector3.up).normalized; break;
-            case TurnDir.DownLeft: dir = (Vector3.left + Vector3.down).normalized; break;
-            case TurnDir.UpRight: dir = (Vector3.right + Vector3.up).normalized; break;
-            case TurnDir.DownRight: dir = (Vector3.right + Vector3.down).normalized; break;
-        }
-        if (dir != moveDirection) moveDirection = dir;
+       moveDirection = currentSegment.GetDirectionVector(turnDir);
     }
 
-    public void Initialize(Vector3 startPos, PathSegment startSegment)
+    /// <summary>
+    /// ✅ Manual turn: Get next turn direction from MapGenerator and apply it
+    /// Check if turn is correct, if wrong → Game Over
+    /// </summary>
+    public void TryTurn()
+    {
+        if (!canMove || !isAlive)
+        {
+            Debug.LogWarning("[PlayerController] Cannot turn - not in playing state!");
+            return;
+        }
+
+        // ✅ Không cho phép rẽ khi đã rời khỏi path
+        if (!isOnPath)
+        {
+            Debug.Log("[PlayerController] ❌ Cannot turn - already off path!");
+            GameOver();
+            return;
+        }
+
+        if (MapGenerator.Instance == null)
+        {
+            Debug.LogWarning("[PlayerController] MapGenerator not found!");
+            return;
+        }
+
+        Vector3 nextDir = MapGenerator.Instance.GetNextTurnDir();
+        
+        if (nextDir != Vector3.zero)
+        {
+            // ✅ Có hướng rẽ hợp lệ từ MapGenerator → Rẽ đúng!
+            moveDirection = nextDir;
+            Debug.Log($"[PlayerController] ✅ Correct turn to direction: {nextDir}");
+        }
+        
+    }
+
+    public void Initialize(Vector3 startPos, PathSegment startSegment, TurnDir initialDirection = TurnDir.Straight)
     {
         transform.position = startPos;
         currentSegment = startSegment;
-        moveDirection = Vector3.forward;
+        
+        // ✅ Set initial move direction based on map's spawn direction
+        if (startSegment != null)
+        {
+            moveDirection = startSegment.GetDirectionVector(initialDirection);
+        }
+        else
+        {
+            moveDirection = Vector3.forward; // Fallback
+        }
+        
         isAlive = true;
         isOnPath = true;
         canMove = false; // Mặc định không cho di chuyển cho đến khi gọi EnableMovement()
-        transform.rotation = Quaternion.identity;
         
-        Debug.Log($"Player initialized at {startPos}");
+        // ✅ Rotate player to face initial direction
+        if (moveDirection != Vector3.zero)
+        {
+            transform.rotation = Quaternion.LookRotation(moveDirection);
+        }
+        else
+        {
+            transform.rotation = Quaternion.identity;
+        }
+        
+        Debug.Log($"[PlayerController] Initialized at {startPos} facing {initialDirection} (direction: {moveDirection})");
     }
-
+#region UTILS
     /// <summary>
     /// Cho phép player di chuyển (gọi sau khi loading xong)
     /// </summary>
@@ -200,15 +273,13 @@ public class PlayerController : Singleton<PlayerController>
     {
         isAlive = false;
         moveDirection = Vector3.zero; // Dừng di chuyển
-        Debug.Log("🔴 GAME OVER - Player rời khỏi đường!");
+        Debug.Log("GAME OVER - Player rời khỏi đường!");
         
         // Gọi GameManager để xử lý game over
-        if (GameManager.Instance != null)
-        {
-            GameManager.Instance.OnGameOver();
-        }
+        if (GameManager.Instance != null) GameManager.Instance.OnGameOver();
     }
 
     public bool IsAlive() => isAlive;
+#endregion
 }
 

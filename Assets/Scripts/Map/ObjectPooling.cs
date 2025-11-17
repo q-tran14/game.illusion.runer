@@ -1,6 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
-
+using System.Threading.Tasks;
 public class ObjectPool : Singleton<ObjectPool>
 {
     [Header("Pool Settings")]
@@ -40,7 +40,7 @@ public class ObjectPool : Singleton<ObjectPool>
         }
     }
 
-    public async System.Threading.Tasks.Task<GameObject> GetAsync()
+    public async Task<GameObject> GetAsync()
     {
         GameObject obj = null;
         
@@ -60,30 +60,8 @@ public class ObjectPool : Singleton<ObjectPool>
         obj.SetActive(true);
         return obj;
     }
-
-    // Sync version (backward compatible - DEPRECATED: use GetAsync instead)
-    public GameObject Get()
-    {
-        Debug.LogWarning("[ObjectPool] Get() is deprecated. Use GetAsync() for better performance.");
-        GameObject obj = null;
-        
-        // Nếu có sẵn trong pool → dùng lại
-        if (pool.Count > 0) obj = pool.Dequeue();
-        // Nếu chưa tới giới hạn → tạo mới
-        else if (totalCreated < maxPoolSize) obj = CreateNewInstance();
-        else
-        {
-            // Đạt giới hạn → không tạo mới, trả null
-            Debug.LogWarning($"[ObjectPool] Max pool size ({maxPoolSize}) reached. Consider increasing maxPoolSize.");
-            return null;
-        }
-        
-        // No decor applied in sync version - use GetAsync() instead
-        obj.SetActive(true);
-        return obj;
-    }
     
-    private async System.Threading.Tasks.Task ApplyDecorToObjectAsync(GameObject obj)
+    private async Task ApplyDecorToObjectAsync(GameObject obj)
     {
         if (obj == null) return;
         

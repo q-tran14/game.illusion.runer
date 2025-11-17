@@ -19,9 +19,10 @@ public class MapGenerator : Singleton<MapGenerator>
     [SerializeField] private int initialStraightCount = 4; // số cube đầu (sau cube gốc) giữ thẳng
     private readonly Dictionary<Vector3, PathSegment> cubeMap = new();
     private readonly List<PathSegment> activeCubes = new();
-
+    private List<Vector3> dirToTurn = new List<Vector3>();
     private Vector3 currentGrid = Vector3.zero;
     private TurnDir currentDir = TurnDir.Straight;
+    private TurnDir initialDir = TurnDir.Straight;
 
     // Spacing đo từ bounds của model (khởi tạo lazy lần đầu spawn)
     private bool spacingInitialized = false;
@@ -34,13 +35,13 @@ public class MapGenerator : Singleton<MapGenerator>
     [SerializeField] private int currentEnvironmentIndex = 0;
     private EnvironmentProfile activeEnvironment;
 
-    [Header("Boot" )]
+    [Header("Boot")]
     [SerializeField] private bool autoSpawnOnStart = false; // Dành cho chạy độc lập không qua GameManager
 
     // Loading state
     private bool isLoading = false;
     private bool isMapReady = false;
-    
+
     public bool IsLoading => isLoading;
     public bool IsMapReady => isMapReady;
 
@@ -55,6 +56,7 @@ public class MapGenerator : Singleton<MapGenerator>
         if (autoSpawnOnStart) SpawnMap();
     }
 
+    #region For Decor Environment
     private void LoadEnvironment(int index)
     {
         if (environments == null || environments.Length == 0)
@@ -104,11 +106,70 @@ public class MapGenerator : Singleton<MapGenerator>
         return currentEnvironmentIndex;
     }
 
+    // Get path decor AssetReference (sync - just returns reference)
+    public AssetReferenceGameObject GetPathDecorAssetRef()
+    {
+        if (activeEnvironment == null
+            || activeEnvironment.pathCubeLibraries == null
+            || activeEnvironment.pathCubeLibraries.Length == 0) return null;
+
+        return PickFromEnvironment();
+    }
+
+    private AssetReferenceGameObject PickFromEnvironment()
+    {
+        var libs = activeEnvironment.pathCubeLibraries;
+
+        switch (activeEnvironment.selectionMode)
+        {
+            case EnvironmentProfile.PathSelectionMode.Single:
+                // Chỉ dùng 1 library cố định
+                int idx = Mathf.Clamp(activeEnvironment.selectedLibraryIndex, 0, libs.Length - 1);
+                if (libs[idx] != null && libs[idx].Count > 0)
+                {
+                    int randomIdx = Random.Range(0, libs[idx].Count);
+                    return libs[idx].items[randomIdx];
+                }
+                break;
+
+            case EnvironmentProfile.PathSelectionMode.Random:
+                // Random chọn library, rồi random cube trong library đó
+                var validLibs = new List<DecorLibrary>();
+                foreach (var lib in libs)
+                {
+                    if (lib != null && lib.Count > 0) validLibs.Add(lib);
+                }
+                if (validLibs.Count > 0)
+                {
+                    var chosenLib = validLibs[Random.Range(0, validLibs.Count)];
+                    int randomIdx = Random.Range(0, chosenLib.Count);
+                    return chosenLib.items[randomIdx];
+                }
+                break;
+
+            case EnvironmentProfile.PathSelectionMode.Mix:
+                // Gộp tất cả thành 1 pool rồi random
+                var allAssetRefs = new List<AssetReferenceGameObject>();
+                foreach (var lib in libs)
+                {
+                    if (lib != null && lib.Count > 0)
+                    {
+                        allAssetRefs.AddRange(lib.items);
+                    }
+                }
+                if (allAssetRefs.Count > 0)
+                    return allAssetRefs[Random.Range(0, allAssetRefs.Count)];
+                break;
+        }
+
+        return null;
+    }
+    #endregion
     public async void SpawnMap()
     {
         isLoading = true;
         isMapReady = false;
-        
+
         Debug.Log("[MapGenerator] Starting map generation...");
         // ✅ Random hướng spawn ban đầu (Forward, Backward, Left, Right)
         TurnDir[] startDirections = new TurnDir[]
@@ -121,21 +182,16 @@ public class MapGenerator : Singleton<MapGenerator>
 
         // Random hướng đầu tiên - sẽ được dùng cho cube thứ 2
         currentDir = startDirections[Random.Range(0, startDirections.Length)];
-
+        initialDir = currentDir;
         Debug.Log($"[MapGenerator] Starting map generation with initial direction: {currentDir}");
         for (int i = 0; i < initialCubes; i++) await SpawnNextCube();
-        
+
         // Spawn player ở giữa trên cube đầu tiên
         if (activeCubes.Count > 0) await SpawnPlayer();
-        
+
         isLoading = false;
         isMapReady = true;
-        // Khi map sẵn sàng, đảm bảo Player được phép di chuyển (không phụ thuộc vào UI)
-        if (PlayerController.Instance != null)
-        {
-            PlayerController.Instance.EnableMovement();
-        }
-        
+
         Debug.Log("[MapGenerator] Map generation complete! Ready to play.");
     }
 
@@ -146,11 +202,11 @@ public class MapGenerator : Singleton<MapGenerator>
         {
             GameObject playerObj = Instantiate(playerPrefab);
             player = playerObj.transform;
-            
+
             // Apply player decor async
             var applicator = playerObj.GetComponent<DecorApplicator>();
             if (applicator == null) applicator = playerObj.AddComponent<DecorApplicator>();
-            
+
             var playerDecorRef = DecorManager.Instance?.GetPlayerDecorAssetRef();
             if (playerDecorRef != null && playerDecorRef.RuntimeKeyIsValid())
             {
@@ -167,7 +223,7 @@ public class MapGenerator : Singleton<MapGenerator>
         {
             // Lấy cube đầu tiên
             PathSegment firstCube = activeCubes[0];
-            
+
             // Tính top Y của cube đầu tiên
             float cubeTopY = Mathf.Abs(firstCube.transform.position.y);
 
@@ -180,9 +236,16 @@ public class MapGenerator : Singleton<MapGenerator>
 
             // Initialize player
             PlayerController playerController = player.GetComponent<PlayerController>();
-            
-            if (playerController != null) playerController.Initialize(spawnPos, firstCube);
-            else player.position = spawnPos;
+
+            if (playerController != null)
+            {
+                // ✅ Pass initial direction to player
+                playerController.Initialize(spawnPos, firstCube, initialDir);
+            }
+            else
+            {
+                player.position = spawnPos;
+            }
         }
     }
 
@@ -200,18 +263,21 @@ public class MapGenerator : Singleton<MapGenerator>
 
         activeCubes.Clear();
         cubeMap.Clear();
+        dirToTurn.Clear(); 
         currentGrid = Vector3.zero;
         currentDir = TurnDir.Straight;
         spacingInitialized = false; // đo lại sau khi clear
 
         // Chỉ dọn pool nếu bạn muốn thực sự hủy các instance nhàn rỗi
         ObjectPool.Instance.RemovePool();
+        
+        Destroy(playerPrefab);
     }
 
     private async void Update()
     {
         if (player == null || activeCubes.Count == 0) return;
-        
+
         // Spawn thêm khi player gần cuối đường
         float dist = Vector3.Distance(player.position, activeCubes[^1].transform.position);
         if (dist < distPlayerAndLastCube) await SpawnNextCube();
@@ -285,20 +351,8 @@ public class MapGenerator : Singleton<MapGenerator>
         bool isFirst = activeCubes.Count == 0;
         bool stillInitialStraight = activeCubes.Count > 0 && activeCubes.Count < initialStraightCount;
 
-        if (isFirst)
-        {
-            // ✅ Cube đầu tiên sử dụng hướng đã random trong SpawnMap()
-            nextDir = currentDir;
-        }
-        else if (stillInitialStraight)
-        {
-            // ✅ Các cube đầu tiên có thể đi theo bất kỳ hướng nào
-            nextDir = currentDir;
-        }
-        else
-        {
-            nextDir = GetNextValidDirection();
-        }
+        if (isFirst || stillInitialStraight) nextDir = currentDir;
+        else nextDir = GetNextValidDirection();
 
         Vector3 nextGrid = isFirst ? Vector3.zero : GetNextGrid(currentGrid, nextDir);
 
@@ -320,9 +374,12 @@ public class MapGenerator : Singleton<MapGenerator>
         // Assign chosen direction to tail, and keep new segment temporarily Straight until next spawn.
         if (activeCubes.Count > 0)
         {
-            var tail = activeCubes[^1];
-            if (tail != null) tail.direction = nextDir;
+            var tail = activeCubes[^1]; // last segment
+            if (tail != null) tail.direction = nextDir;     //!
+            if (tail != null && tail.previous != null && tail.previous.direction != tail.direction) 
+                dirToTurn.Add(tail.GetDirectionVector(tail.direction));
         }
+
         // New segment starts with Straight; it will receive its real direction on the next spawn cycle.
         seg.Init(nextGrid, TurnDir.Straight, FaceType.Top);
         // Link list
@@ -330,6 +387,7 @@ public class MapGenerator : Singleton<MapGenerator>
         {
             var prev = activeCubes[^1];
             if (prev != null) prev.next = seg;
+            seg.previous = prev;
         }
 
         // Khởi tạo spacing nếu chưa có (đo từ Renderer/Collider bounds)
@@ -345,7 +403,7 @@ public class MapGenerator : Singleton<MapGenerator>
         // Đưa mesh (pivot lệch) vào đúng center bằng cách worldPos = desiredCenter - placementOffset
         Vector3 worldPos = desiredCenter - placementOffset;
         prefabObj.transform.position = worldPos;
-        
+
         prefabObj.transform.rotation = Quaternion.identity;
 
         cubeMap[nextGrid] = seg;
@@ -355,65 +413,6 @@ public class MapGenerator : Singleton<MapGenerator>
         currentGrid = nextGrid;
 
         prefabObj.SetActive(true);
-    }
-
-    // Get path decor AssetReference (sync - just returns reference)
-    public AssetReferenceGameObject GetPathDecorAssetRef()
-    {
-        if (activeEnvironment == null 
-            || activeEnvironment.pathCubeLibraries == null 
-            || activeEnvironment.pathCubeLibraries.Length == 0) return null;
-            
-        return PickFromEnvironment();
-    }
-
-    private AssetReferenceGameObject PickFromEnvironment()
-    {
-        var libs = activeEnvironment.pathCubeLibraries;
-        
-        switch (activeEnvironment.selectionMode)
-        {
-            case EnvironmentProfile.PathSelectionMode.Single:
-                // Chỉ dùng 1 library cố định
-                int idx = Mathf.Clamp(activeEnvironment.selectedLibraryIndex, 0, libs.Length - 1);
-                if (libs[idx] != null && libs[idx].Count > 0)
-                {
-                    int randomIdx = Random.Range(0, libs[idx].Count);
-                    return libs[idx].items[randomIdx];
-                }
-                break;
-                
-            case EnvironmentProfile.PathSelectionMode.Random:
-                // Random chọn library, rồi random cube trong library đó
-                var validLibs = new List<DecorLibrary>();
-                foreach (var lib in libs)
-                {
-                    if (lib != null && lib.Count > 0) validLibs.Add(lib);
-                }
-                if (validLibs.Count > 0)
-                {
-                    var chosenLib = validLibs[Random.Range(0, validLibs.Count)];
-                    int randomIdx = Random.Range(0, chosenLib.Count);
-                    return chosenLib.items[randomIdx];
-                }
-                break;
-                
-            case EnvironmentProfile.PathSelectionMode.Mix:
-                // Gộp tất cả thành 1 pool rồi random
-                var allAssetRefs = new List<AssetReferenceGameObject>();
-                foreach (var lib in libs)
-                {
-                    if (lib != null && lib.Count > 0)
-                    {
-                        allAssetRefs.AddRange(lib.items);
-                    }
-                }
-                if (allAssetRefs.Count > 0)
-                    return allAssetRefs[Random.Range(0, allAssetRefs.Count)];
-                break;
-        }
-        
-        return null;
     }
 
     // Đo kích thước thực tế của model để tính spacing (center-to-center)
@@ -444,15 +443,15 @@ public class MapGenerator : Singleton<MapGenerator>
             }
         }
 
-    float fallback = cubeSize + gap;
-    spacingX = hasBounds ? bounds.size.x + gap : fallback;
-    spacingZ = hasBounds ? bounds.size.z + gap : fallback;
+        float fallback = cubeSize + gap;
+        spacingX = hasBounds ? bounds.size.x + gap : fallback;
+        spacingZ = hasBounds ? bounds.size.z + gap : fallback;
 
-    // Tính offset để đưa tâm mesh đúng tại tọa độ grid (pivot có thể không ở giữa)
-    Vector3 center = hasBounds ? bounds.center : sample.transform.position;
-    Vector3 pivot = sample.transform.position;
-    // Để khi đặt worldPos = -placementOffset, mesh center đặt tại (0,0,0)
-    placementOffset = center - pivot;
+        // Tính offset để đưa tâm mesh đúng tại tọa độ grid (pivot có thể không ở giữa)
+        Vector3 center = hasBounds ? bounds.center : sample.transform.position;
+        Vector3 pivot = sample.transform.position;
+        // Để khi đặt worldPos = -placementOffset, mesh center đặt tại (0,0,0)
+        placementOffset = center - pivot;
         spacingInitialized = true;
         // Debug.Log($"[MapGenerator] spacingX={spacingX:F2}, spacingZ={spacingZ:F2}");
     }
@@ -486,29 +485,25 @@ public class MapGenerator : Singleton<MapGenerator>
         {
             case TurnDir.Left: return TurnDir.Right;
             case TurnDir.Right: return TurnDir.Left;
-            case TurnDir.UpLeft: return TurnDir.DownRight;
-            case TurnDir.DownLeft: return TurnDir.UpRight;
-            case TurnDir.UpRight: return TurnDir.DownLeft;
-            case TurnDir.DownRight: return TurnDir.UpLeft;
             case TurnDir.Backward: return TurnDir.Straight;
             case TurnDir.Straight: return TurnDir.Backward;
+            case TurnDir.Up: return TurnDir.Down;
+            case TurnDir.Down: return TurnDir.Up;
             default: return TurnDir.Straight;
         }
     }
 
     private Vector3 GetNextGrid(Vector3 pos, TurnDir dir)
     {
-        // ✅ SỬA: Đồng bộ với hướng player (Z = forward, X = left/right)
+        // ✅ SỬA: Đồng bộ với hướng player (Z = forward/ backward, X = left/right)
         switch (dir)
         {
-            case TurnDir.Straight:   return pos + new Vector3(0, 0, 1);   //* Tiến thẳng (Z+)
-            case TurnDir.Backward:   return pos + new Vector3(0, 0, -1);  //* Lùi (Z-)
-            case TurnDir.Left:       return pos + new Vector3(-1, 0, 0);  //* Rẽ trái (X-)
-            case TurnDir.Right:      return pos + new Vector3(1, 0, 0);   //* Rẽ phải (X+)
-            case TurnDir.UpLeft:     return pos + new Vector3(-1, 0, 1);  // Trái + Tiến
-            case TurnDir.DownLeft:   return pos + new Vector3(-1, 0, -1); // Trái + Lùi
-            case TurnDir.UpRight:    return pos + new Vector3(1, 0, 1);   // Phải + Tiến
-            case TurnDir.DownRight:  return pos + new Vector3(1, 0, -1);  // Phải + Lùi
+            case TurnDir.Straight: return pos + new Vector3(0, 0, 1);   //* Tiến thẳng (Z+)
+            case TurnDir.Backward: return pos + new Vector3(0, 0, -1);  //* Lùi (Z-)
+            case TurnDir.Left: return pos + new Vector3(-1, 0, 0);  //* Rẽ trái (X-)
+            case TurnDir.Right: return pos + new Vector3(1, 0, 0);   //* Rẽ phải (X+)
+            case TurnDir.Up: return pos + new Vector3(0, 1, 0);      // Lên
+            case TurnDir.Down: return pos + new Vector3(0, -1, 0);    // Xuống
             default: return pos + new Vector3(0, 0, 1);
         }
     }
@@ -555,13 +550,13 @@ public class MapGenerator : Singleton<MapGenerator>
         foreach (var dir in directions)
         {
             Vector3 neighborPos = pos + dir;
-            
+
             // Nếu có cube tại neighbor này
             if (cubeMap.ContainsKey(neighborPos))
             {
                 // Đếm xem cube neighbor này hiện có bao nhiêu neighbors
                 int neighborCount = CountNeighbors(neighborPos);
-                
+
                 // Nếu nó đã có 2 neighbors, thì việc thêm cube mới sẽ làm nó có 3
                 if (neighborCount >= 2)
                 {
@@ -571,5 +566,14 @@ public class MapGenerator : Singleton<MapGenerator>
         }
 
         return false;
+    }
+
+    public Vector3 GetNextTurnDir(){
+        if (dirToTurn.Count > 0){
+            Vector3 dir = dirToTurn[0];
+            dirToTurn.RemoveAt(0);
+            return dir;
+        }
+        return Vector3.zero;
     }
 }
