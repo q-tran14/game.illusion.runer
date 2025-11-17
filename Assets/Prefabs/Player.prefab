@@ -99,8 +99,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   speed: 20
   rotationSpeed: 20
-  autoTurn: 0
-  pathCheckRadiusMultiplier: 0.6
+  autoTurn: 1
+  centeringSpeed: 5
 --- !u!65 &5629035667088961693
 BoxCollider:
   m_ObjectHideFlags: 0
